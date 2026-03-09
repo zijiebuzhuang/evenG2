@@ -1,0 +1,9 @@
+{
+  "name": "MoonWalker",
+  "packageName": "com.moonwalker.nav",
+  "version": "1.0.0",
+  "description": "简洁的漫步导航 - 只显示方向和距离",
+  "author": "zijiechen",
+  "icon": "icon.png",
+  "entryPoint": "index.html"
+}

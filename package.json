@@ -1,0 +1,22 @@
+{
+  "name": "moonwalker",
+  "version": "1.0.0",
+  "description": "MoonWalker - 简洁的 AR 漫步导航应用",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "qr": "evenhub qr",
+    "simulator": "evenhub-simulator http://localhost:5173"
+  },
+  "dependencies": {
+    "@evenrealities/even_hub_sdk": "^0.0.7"
+  },
+  "devDependencies": {
+    "vite": "^5.0.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
