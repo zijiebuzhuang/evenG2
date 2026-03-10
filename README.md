@@ -1,84 +1,123 @@
-# 🌙 MoonWalker
+# MoonWalker
+
+Minimalist AR navigation app designed for Even Realities G2 smart glasses.
 
 简洁的 AR 漫步导航应用 - 为 Even Realities G2 智能眼镜设计
 
-## 特点
+## Features
 
-- **极简导航**: 眼镜中只显示方向箭头和距离，无复杂路线图
-- **漫步体验**: 跟随方向自由探索，享受漫步的乐趣
-- **高德地图**: 集成高德地图 API，搜索全国地点
-- **实时更新**: 每 2 秒更新一次方向和距离
+- **Minimalist Navigation**: Only direction arrows and distance displayed on glasses, no complex route maps
+- **Wandering Experience**: Follow directions to explore freely and enjoy the journey
+- **Dual Map Services**: Amap for China, Photon (OpenStreetMap) for global locations
+- **Navigation History**: Automatically saves visited destinations with localStorage
+- **Stoic Quotes**: Philosophical quotes displayed during navigation, updated every 10 minutes
+- **Real-time Updates**: Direction and distance refreshed every 2 seconds
+- **Safe Area Support**: iOS notch and gesture bar handling
 
-## 快速开始
+## Quick Start
 
-### 1. 安装依赖
+### 1. Install Dependencies
 
 ```bash
 npm install
 ```
 
-### 2. 配置高德地图 API Key
+### 2. Configure Amap API Key
 
-编辑 `src/main.js`，替换 `AMAP_KEY`:
+Copy the environment template and add your API key:
 
-```javascript
-const AMAP_KEY = 'YOUR_AMAP_KEY_HERE';
+```bash
+cp .env.example .env
 ```
 
-获取 API Key: https://lbs.amap.com/
+Edit `.env` and replace with your actual key:
 
-### 3. 启动开发服务器
+```env
+VITE_AMAP_KEY=your_amap_key_here
+```
+
+Get your API key from: https://console.amap.com/
+
+### 3. Start Development Server
 
 ```bash
 npm run dev
 ```
 
-### 4. 在模拟器中测试
+### 4. Test in Simulator
 
 ```bash
 npm run simulator
 ```
 
-### 5. 生成 QR 码在真机测试
+### 5. Test on Real Device
 
 ```bash
 npm run qr
 ```
 
-用 Even App 扫描 QR 码加载应用。
+Scan the QR code with Even App to load the application.
 
-## 使用方法
+## Usage
 
-1. **手机端**: 搜索目的地，点击结果，点击"开始导航"
-2. **眼镜端**: 显示方向箭头（↑ ↗ → ↘ ↓ ↙ ← ↖）和距离
-3. **交互**: 双击眼镜可切换导航开关
-4. **到达**: 距离目的地 50 米内自动提示"已到达"
+1. **Phone**: Search for destination, select result, tap "Start Navigation"
+2. **Glasses**: View direction arrow (↑ ↗ → ↘ ↓ ↙ ← ↖) and distance
+3. **Interaction**: Double-click on glasses to toggle navigation
+4. **Arrival**: Automatic "Arrived" notification within 50 meters
 
-## 技术栈
+## Tech Stack
 
 - Even Hub SDK 0.0.7
-- 高德地图 Web API
+- Amap Web API / Photon API
 - Vite
-- 原生 JavaScript
+- Vanilla JavaScript
+- FK Grotesk Neue font
 
-## 项目结构
+## Project Structure
 
 ```
 MoonWalker/
 ├── src/
-│   └── main.js          # 主逻辑
-├── index.html           # 手机端界面
-├── app.json             # EvenHub 应用配置
-├── package.json
+│   ├── main.js              # Main application logic
+│   ├── styles.css           # Design system & styles
+│   └── design-system.js     # Design tokens
+├── public/
+│   ├── fonts/               # FK Grotesk Neue fonts
+│   ├── arrow-icon.svg       # Navigation arrow icon
+│   └── moonwalker-icon.png  # App icon
+├── index.html               # Phone UI
+├── app.json                 # EvenHub app config
+├── .env.example             # Environment template
 └── vite.config.js
 ```
 
-## 开发说明
+## Display Specifications
 
-- 眼镜显示分辨率: 576×288 像素
-- 导航更新频率: 2 秒
-- 到达判定距离: 50 米
-- 方向精度: 8 个方向（45° 间隔）
+### Welcome Page (Glasses)
+- Title: x=20, y=20, 350×80
+- Description: x=20, y=80, 350×150
+- Icon: x=430, y=90, 70×70
+
+### Navigation Page (Glasses)
+- Arrow icon: x=20, y=20, 28×28
+- Distance: x=72, y=20, 330×80
+- Quote: x=20, y=220, 480×60
+
+## Development Notes
+
+- Glasses display resolution: 576×288 pixels
+- Navigation update frequency: 2 seconds
+- Arrival threshold: 50 meters
+- Direction precision: 8 directions (45° intervals)
+- **Important**: Icons must be white for proper display on glasses (black icons appear dim)
+- **Important**: Always restart simulator after code changes
+
+## Design System
+
+- **Font**: FK Grotesk Neue (Light 300, Regular 400)
+- **Colors**: CSS variables defined in `src/styles.css`
+- **Spacing**: 8px grid system
+- **Border Radius**: 6px standard
 
 ## License
 
