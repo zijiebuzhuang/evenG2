@@ -1,7 +1,7 @@
 import { waitForEvenAppBridge, ImageContainerProperty, RebuildPageContainer } from '@evenrealities/even_hub_sdk';
 
-// Amap API Key
-const AMAP_KEY = 'ab7fead9ed236f6ebeb6979fe6c7a023';
+// Amap API Key (from environment variable)
+const AMAP_KEY = import.meta.env.VITE_AMAP_KEY;
 
 // --- SVG Icon Constants ---
 const ICON_NAV_ARROW = `
