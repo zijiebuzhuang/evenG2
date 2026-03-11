@@ -10,13 +10,13 @@ const ICON_NAV_ARROW = `
   </svg>`;
 
 const ICON_CANCEL = `
-  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <g clip-path="url(#clip0_875_51267)">
-      <path d="M5.25 20.25H3.75V18.75H5.25V20.25ZM20.25 20.25H18.75V18.75H20.25V20.25ZM6.75 18.75H5.25V17.25H6.75V18.75ZM18.75 18.75H17.25V17.25H18.75V18.75ZM8.25 17.25H6.75V15.75H8.25V17.25ZM17.25 17.25H15.75V15.75H17.25V17.25ZM9.75 15.75H8.25V14.25H9.75V15.75ZM15.75 15.75H14.25V14.25H15.75V15.75ZM11.25 14.25H9.75V12.75H11.25V14.25ZM14.25 14.25H12.75V12.75H14.25V14.25ZM11.25 11.25H9.75V9.75H11.25V11.25ZM14.25 11.25H12.75V9.75H14.25V11.25ZM9.75 9.75H8.25V8.25H9.75V9.75ZM15.75 9.75H14.25V8.25H15.75V9.75ZM8.25 8.25H6.75V6.75H8.25V8.25ZM17.25 8.25H15.75V6.75H17.25V8.25ZM6.75 6.75H5.25V5.25H6.75V6.75ZM18.75 6.75H17.25V5.25H18.75V6.75ZM5.25 3.75V5.25H3.75V3.75H5.25ZM20.25 5.25H18.75V3.75H20.25V5.25Z" fill="white"/>
+  <svg width="24" height="24" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <g clip-path="url(#clip0_cancel)">
+      <path d="M22 27H10V25H22V27ZM24 25H22V23H24V25ZM26 23H24V15H26V23ZM14 19H12V17H14V19ZM12 17H10V15H12V17ZM10 15H8V13H10V15ZM24 15H22V13H24V15ZM8 13H6V11H8V13ZM22 13H10V11H22V13ZM10 11H8V9H10V11ZM12 9H10V7H12V9ZM14 7H12V5H14V7Z" fill="white"/>
     </g>
     <defs>
-      <clipPath id="clip0_875_51267">
-        <rect width="24" height="24" fill="white"/>
+      <clipPath id="clip0_cancel">
+        <rect width="32" height="32" fill="white"/>
       </clipPath>
     </defs>
   </svg>`;
@@ -103,9 +103,18 @@ const state = {
   navigationInterval: null,
   quoteInterval: null,
   quoteRetryInterval: null,
+  quoteHideTimeout: null, // Timeout for hiding quote after duration
   pageCreated: false,
   mapService: 'amap', // 'amap' or 'photon'
-  navigationHistory: [] // Store navigation history
+  navigationHistory: [], // Store navigation history
+  philosophyEnabled: true, // Philosophy quotes enabled by default
+  quoteDuration: 10, // Quote display duration in seconds (10, 30, 60, or 'always')
+  contentSources: {
+    stoic: true,
+    typefit: false,
+    hitokoto: false,
+    zenquotes: false
+  }
 };
 
 // Load navigation history from localStorage
@@ -146,23 +155,127 @@ function addToNavigationHistory(location) {
   }
 }
 
-// Fetch stoic quote from API
-async function fetchStoicQuote() {
+// Load philosophy setting from localStorage
+function loadPhilosophySetting() {
   try {
-    const response = await fetch('https://stoic-quotes.com/api/quote');
-    if (!response.ok) throw new Error('API failed');
-    const data = await response.json();
-    return `"${data.text}" — ${data.author}`;
+    const saved = localStorage.getItem('philosophyEnabled');
+    if (saved !== null) {
+      state.philosophyEnabled = JSON.parse(saved);
+    }
   } catch (error) {
-    console.error('Failed to fetch quote:', error);
-    throw error; // Re-throw to handle retry logic
+    console.error('Failed to load philosophy setting:', error);
+  }
+}
+
+// Save philosophy setting to localStorage
+function savePhilosophySetting() {
+  try {
+    localStorage.setItem('philosophyEnabled', JSON.stringify(state.philosophyEnabled));
+  } catch (error) {
+    console.error('Failed to save philosophy setting:', error);
+  }
+}
+
+// Load quote duration setting from localStorage
+function loadQuoteDurationSetting() {
+  try {
+    const saved = localStorage.getItem('quoteDuration');
+    if (saved !== null) {
+      state.quoteDuration = JSON.parse(saved);
+    }
+  } catch (error) {
+    console.error('Failed to load quote duration setting:', error);
+  }
+}
+
+// Save quote duration setting to localStorage
+function saveQuoteDurationSetting() {
+  try {
+    localStorage.setItem('quoteDuration', JSON.stringify(state.quoteDuration));
+  } catch (error) {
+    console.error('Failed to save quote duration setting:', error);
+  }
+}
+
+// Load content sources setting from localStorage
+function loadContentSourcesSetting() {
+  try {
+    const saved = localStorage.getItem('contentSources');
+    if (saved !== null) {
+      state.contentSources = JSON.parse(saved);
+    }
+  } catch (error) {
+    console.error('Failed to load content sources setting:', error);
+  }
+}
+
+// Save content sources setting to localStorage
+function saveContentSourcesSetting() {
+  try {
+    localStorage.setItem('contentSources', JSON.stringify(state.contentSources));
+  } catch (error) {
+    console.error('Failed to save content sources setting:', error);
+  }
+}
+
+// Fetch stoic quote from stoic-quotes.com
+async function fetchStoicQuote() {
+  const response = await fetch('https://stoic-quotes.com/api/quote');
+  if (!response.ok) throw new Error('Stoic API failed');
+  const data = await response.json();
+  return `"${data.text}" — ${data.author}`;
+}
+
+// Fetch quote from type.fit
+async function fetchTypefitQuote() {
+  const response = await fetch('https://type.fit/api/quotes');
+  if (!response.ok) throw new Error('Type.fit API failed');
+  const data = await response.json();
+  const item = data[Math.floor(Math.random() * data.length)];
+  const author = item.author ? ` — ${item.author.replace(', type.fit', '')}` : '';
+  return `"${item.text}"${author}`;
+}
+
+// Fetch quote from hitokoto (anime/literary quotes)
+async function fetchHitokotoQuote() {
+  const response = await fetch('https://v1.hitokoto.cn/?c=i&c=k');
+  if (!response.ok) throw new Error('Hitokoto API failed');
+  const data = await response.json();
+  const author = data.from ? ` — ${data.from}` : '';
+  return `"${data.hitokoto}"${author}`;
+}
+
+// Fetch quote from zenquotes
+async function fetchZenquoteQuote() {
+  const response = await fetch('https://zenquotes.io/api/random');
+  if (!response.ok) throw new Error('ZenQuotes API failed');
+  const data = await response.json();
+  return `"${data[0].q}" — ${data[0].a}`;
+}
+
+// Pick a random enabled source and fetch a quote
+async function fetchQuoteFromEnabledSources() {
+  const enabled = Object.entries(state.contentSources)
+    .filter(([, on]) => on)
+    .map(([key]) => key);
+
+  if (enabled.length === 0) return '';
+
+  const source = enabled[Math.floor(Math.random() * enabled.length)];
+
+  switch (source) {
+    case 'stoic':     return await fetchStoicQuote();
+    case 'typefit':   return await fetchTypefitQuote();
+    case 'hitokoto':  return await fetchHitokotoQuote();
+    case 'zenquotes': return await fetchZenquoteQuote();
+    default:          return '';
   }
 }
 
 // Fetch quote with retry logic
 async function fetchQuoteWithRetry() {
   try {
-    const quote = await fetchStoicQuote();
+    const quote = await fetchQuoteFromEnabledSources();
     // Clear retry interval if successful
     if (state.quoteRetryInterval) {
       clearInterval(state.quoteRetryInterval);
@@ -186,6 +299,25 @@ async function updateQuoteOnGlasses(quote) {
       contentLength: 200,
       content: quote
     });
+
+    // Clear any existing hide timeout
+    if (state.quoteHideTimeout) {
+      clearTimeout(state.quoteHideTimeout);
+      state.quoteHideTimeout = null;
+    }
+
+    // If duration is not 'always', schedule hiding the quote
+    if (state.quoteDuration !== 'always' && quote !== '') {
+      state.quoteHideTimeout = setTimeout(async () => {
+        await state.bridge.textContainerUpgrade({
+          containerID: 1003,
+          containerName: 'quote',
+          contentOffset: 0,
+          contentLength: 200,
+          content: ''
+        });
+      }, state.quoteDuration * 1000);
+    }
   } catch (error) {
     console.error('Failed to update quote:', error);
   }
@@ -199,17 +331,16 @@ async function initBridge() {
     console.log('Bridge initialized:', state.bridge);
 
     // Listen for device status changes
-    state.bridge.onDeviceStatusChanged((status) => {
+    state.bridge.onDeviceStatusChanged(async (status) => {
       console.log('Device status changed:', status);
       if (status.connectType === 'Connected') {
         state.isConnected = true;
         console.log('Device connected, isConnected:', state.isConnected);
-        updateStatus('Glasses connected', 'connected');
 
         // Create initial page on first connection
         if (!state.pageCreated) {
           console.log('Creating initial page...');
-          createInitialPage();
+          await createInitialPage();
         }
       } else if (status.connectType === 'Disconnected') {
         state.isConnected = false;
@@ -229,8 +360,6 @@ async function initBridge() {
       }
     });
 
-    updateStatus('Waiting for glasses...', 'waiting');
-
     // Proactively check device status
     setTimeout(async () => {
       try {
@@ -239,7 +368,6 @@ async function initBridge() {
         if (deviceInfo && !state.pageCreated) {
           console.log('Device detected, forcing page creation...');
           state.isConnected = true;
-          updateStatus('Glasses connected', 'connected');
           await createInitialPage();
         }
       } catch (error) {
@@ -391,18 +519,29 @@ async function loadAndDisplayIcon() {
 // Create initial welcome page on glasses
 async function createInitialPage() {
   try {
+    console.log('createInitialPage called, isConnected:', state.isConnected, 'pageCreated:', state.pageCreated);
+
+    // First try to clear any existing page
+    try {
+      await state.bridge.clearStartUpPageContainer();
+      console.log('Cleared existing page');
+    } catch (e) {
+      console.log('No existing page to clear or clear failed:', e);
+    }
+
     const result = await state.bridge.createStartUpPageContainer({
       containerTotalNum: 3,
       textObject: WELCOME_TEXT_OBJECTS,
       imageObject: [createWelcomeImageObject()]
     });
 
+    console.log('createStartUpPageContainer result:', result);
     if (result === 0) {
       state.pageCreated = true;
-      console.log('Initial page created');
+      console.log('Initial page created successfully, pageCreated:', state.pageCreated);
       await loadAndDisplayIcon();
     } else {
-      console.error('Failed to create page:', result);
+      console.error('Failed to create page, result code:', result);
     }
   } catch (error) {
     console.error('Create page error:', error);
@@ -599,21 +738,24 @@ async function switchToNavigationMode() {
   try {
     console.log('Rebuilding page with arrow, distance, and quote...');
 
-    // Fetch initial quote with retry
-    const initialQuote = await fetchQuoteWithRetry();
+    // Fetch initial quote with retry (only if philosophy is enabled)
+    let initialQuote = '';
+    if (state.philosophyEnabled) {
+      initialQuote = await fetchQuoteWithRetry();
 
-    // If quote failed, start retry interval
-    if (initialQuote === 'Request failed, retrying...') {
-      state.quoteRetryInterval = setInterval(async () => {
-        try {
-          const newQuote = await fetchStoicQuote();
-          await updateQuoteOnGlasses(newQuote);
-          clearInterval(state.quoteRetryInterval);
-          state.quoteRetryInterval = null;
-        } catch (error) {
-          console.log('Retrying quote fetch...');
-        }
-      }, 5000); // Retry every 5 seconds
+      // If quote failed, start retry interval
+      if (initialQuote === 'Request failed, retrying...') {
+        state.quoteRetryInterval = setInterval(async () => {
+          try {
+            const newQuote = await fetchQuoteFromEnabledSources();
+            await updateQuoteOnGlasses(newQuote);
+            clearInterval(state.quoteRetryInterval);
+            state.quoteRetryInterval = null;
+          } catch (error) {
+            console.log('Retrying quote fetch...');
+          }
+        }, 5000); // Retry every 5 seconds
+      }
     }
 
     // Create arrow image container
@@ -731,11 +873,13 @@ async function startNavigation() {
     updateStatus('Navigating', 'navigating');
     await switchToNavigationMode();
 
-    // Update quote every 10 minutes
-    state.quoteInterval = setInterval(async () => {
-      const newQuote = await fetchStoicQuote();
-      await updateQuoteOnGlasses(newQuote);
-    }, 600000); // 10 minutes = 600000ms
+    // Update quote every 10 minutes (only if philosophy is enabled)
+    if (state.philosophyEnabled) {
+      state.quoteInterval = setInterval(async () => {
+        const newQuote = await fetchQuoteFromEnabledSources();
+        await updateQuoteOnGlasses(newQuote);
+      }, 600000); // 10 minutes = 600000ms
+    }
 
     // Update direction and distance every 2 seconds
     state.navigationInterval = setInterval(async () => {
@@ -799,11 +943,9 @@ async function stopNavigation() {
     await loadAndDisplayIcon();
   }
 
-  updateStatus('Glasses connected', 'connected');
-
   // Update button based on whether location is selected
   if (state.selectedLocation) {
-    setNavButtonContent(`Navigate to ${state.selectedLocation.name}`);
+    setNavButtonContent('Start Navigation');
   } else {
     setNavButtonContent('Start Navigation');
   }
@@ -824,11 +966,200 @@ document.addEventListener('DOMContentLoaded', () => {
   const resultsEl = document.getElementById('results');
   const navButton = document.getElementById('navButton');
   const mapTabs = document.querySelectorAll('.map-tab');
+  const settingsButton = document.getElementById('settingsButton');
+  const backButton = document.getElementById('backButton');
+  const settingsPage = document.getElementById('settingsPage');
+  const container = document.querySelector('.container');
+  const philosophyToggle = document.getElementById('philosophyToggle');
+  const durationButton = document.getElementById('durationButton');
+  const durationValue = document.getElementById('durationValue');
+  const durationModal = document.getElementById('durationModal');
+  const modalOptions = document.querySelectorAll('.modal-option');
+  const modalCloseButton = document.getElementById('modalCloseButton');
+  const modalConfirmButton = document.getElementById('modalConfirmButton');
+  const stoicToggle = document.getElementById('stoicOption');
+  const typefitToggle = document.getElementById('typefitOption');
+  const hitokotoToggle = document.getElementById('hitokotoOption');
+  const zenquotesToggle = document.getElementById('zenquotesOption');
 
   let searchTimeout;
+  let tempSelectedDuration = null; // Temporary selection before confirmation
 
-  // Load navigation history
+  // Load settings
   loadNavigationHistory();
+  loadPhilosophySetting();
+  loadQuoteDurationSetting();
+  loadContentSourcesSetting();
+
+  // Update duration display
+  function updateDurationDisplay() {
+    if (state.quoteDuration === 'always') {
+      durationValue.textContent = 'Always Show';
+    } else {
+      durationValue.textContent = `${state.quoteDuration}s`;
+    }
+  }
+
+  // Initialize duration display
+  updateDurationDisplay();
+
+  // Update toggle UI based on saved setting
+  function updateToggleUI() {
+    const toggleImg = philosophyToggle.querySelector('img');
+    if (state.philosophyEnabled) {
+      toggleImg.src = '/toggle-on.svg';
+      philosophyToggle.dataset.enabled = 'true';
+    } else {
+      toggleImg.src = '/toggle-off.svg';
+      philosophyToggle.dataset.enabled = 'false';
+    }
+  }
+
+  // Initialize toggle UI
+  updateToggleUI();
+
+  // Update content source toggles UI
+  function updateSourceTogglesUI() {
+    const toggles = { stoic: stoicToggle, typefit: typefitToggle, hitokoto: hitokotoToggle, zenquotes: zenquotesToggle };
+    Object.entries(toggles).forEach(([key, toggle]) => {
+      const img = toggle.querySelector('img');
+      if (state.contentSources[key]) {
+        img.src = '/checked.svg';
+        toggle.dataset.checked = 'true';
+      } else {
+        img.src = '/unchecked.svg';
+        toggle.dataset.checked = 'false';
+      }
+    });
+  }
+
+  // Initialize source toggles UI
+  updateSourceTogglesUI();
+
+  // Content source toggle handlers
+  [
+    { toggle: stoicToggle, key: 'stoic' },
+    { toggle: typefitToggle, key: 'typefit' },
+    { toggle: hitokotoToggle, key: 'hitokoto' },
+    { toggle: zenquotesToggle, key: 'zenquotes' }
+  ].forEach(({ toggle, key }) => {
+    toggle.addEventListener('click', () => {
+      state.contentSources[key] = !state.contentSources[key];
+      saveContentSourcesSetting();
+      updateSourceTogglesUI();
+    });
+  });
+
+  // Philosophy toggle handler
+  philosophyToggle.addEventListener('click', async () => {
+    state.philosophyEnabled = !state.philosophyEnabled;
+    savePhilosophySetting();
+    updateToggleUI();
+    console.log('Philosophy quotes:', state.philosophyEnabled ? 'enabled' : 'disabled');
+
+    // If currently navigating, apply changes immediately
+    if (state.isNavigating) {
+      if (state.philosophyEnabled) {
+        // Enable: fetch and display quote
+        try {
+          const newQuote = await fetchQuoteFromEnabledSources();
+          await updateQuoteOnGlasses(newQuote);
+
+          // Start quote update interval
+          if (!state.quoteInterval) {
+            state.quoteInterval = setInterval(async () => {
+              const quote = await fetchQuoteFromEnabledSources();
+              await updateQuoteOnGlasses(quote);
+            }, 600000); // 10 minutes
+          }
+        } catch (error) {
+          console.error('Failed to fetch quote:', error);
+        }
+      } else {
+        // Disable: clear quote and stop interval
+        await updateQuoteOnGlasses('');
+
+        if (state.quoteInterval) {
+          clearInterval(state.quoteInterval);
+          state.quoteInterval = null;
+        }
+        if (state.quoteRetryInterval) {
+          clearInterval(state.quoteRetryInterval);
+          state.quoteRetryInterval = null;
+        }
+      }
+    }
+  });
+
+  // Settings page navigation
+  settingsButton.addEventListener('click', () => {
+    container.style.display = 'none';
+    settingsPage.classList.remove('hidden');
+  });
+
+  backButton.addEventListener('click', () => {
+    settingsPage.classList.add('hidden');
+    container.style.display = 'flex';
+  });
+
+  // Duration button handler - open modal
+  durationButton.addEventListener('click', () => {
+    // Initialize temp selection with current value
+    tempSelectedDuration = state.quoteDuration;
+    durationModal.classList.remove('hidden');
+
+    // Update selected state based on current saved value
+    modalOptions.forEach(option => {
+      const duration = option.dataset.duration;
+      if (duration === String(state.quoteDuration)) {
+        option.classList.add('selected');
+      } else {
+        option.classList.remove('selected');
+      }
+    });
+  });
+
+  // Modal option handlers - only update temp selection
+  modalOptions.forEach(option => {
+    option.addEventListener('click', () => {
+      const duration = option.dataset.duration;
+      tempSelectedDuration = duration === 'always' ? 'always' : parseInt(duration);
+
+      // Update UI to show selection
+      modalOptions.forEach(opt => {
+        if (opt.dataset.duration === duration) {
+          opt.classList.add('selected');
+        } else {
+          opt.classList.remove('selected');
+        }
+      });
+    });
+  });
+
+  // Confirm button handler - apply the selection
+  modalConfirmButton.addEventListener('click', () => {
+    if (tempSelectedDuration !== null) {
+      state.quoteDuration = tempSelectedDuration;
+      saveQuoteDurationSetting();
+      updateDurationDisplay();
+      console.log('Quote duration set to:', state.quoteDuration);
+    }
+    durationModal.classList.add('hidden');
+  });
+
+  // Close modal when clicking overlay - discard selection
+  durationModal.addEventListener('click', (e) => {
+    if (e.target === durationModal) {
+      durationModal.classList.add('hidden');
+      tempSelectedDuration = null;
+    }
+  });
+
+  // Close modal when clicking close button - discard selection
+  modalCloseButton.addEventListener('click', () => {
+    durationModal.classList.add('hidden');
+    tempSelectedDuration = null;
+  });
 
   // Display navigation history on load
   function displayNavigationHistory() {
@@ -861,7 +1192,7 @@ document.addEventListener('DOMContentLoaded', () => {
         item.addEventListener('click', () => {
           state.selectedLocation = state.navigationHistory[index];
           navButton.disabled = false;
-          setNavButtonContent(`Navigate to ${state.navigationHistory[index].name}`);
+          setNavButtonContent('Start Navigation');
 
           // Highlight selected item
           resultsEl.querySelectorAll('.result-item').forEach(el => {
@@ -884,25 +1215,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
       state.mapService = tab.dataset.service;
 
-      // Update info card text
-      const infoCardText = document.getElementById('infoCardText');
-      if (state.mapService === 'amap') {
-        infoCardText.textContent = 'Amap service for location search in mainland China';
-      } else {
-        infoCardText.textContent = 'Photon (OpenStreetMap) service for global location search';
-      }
-
-      // Clear search results on tab switch
-      resultsEl.classList.add('empty');
-      resultsEl.innerHTML = `
-        <div class="empty-state">
-          <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M27 27H24V24H27V27ZM24 24H21V21H24V24ZM21 21H18V18H21V21ZM16 20H9V18H16V20ZM9 18H7V16H9V18ZM18 18H16V16H18V18ZM7 16H5V9H7V16ZM20 16H18V9H20V16ZM9 9H7V7H9V9ZM18 9H16V7H18V9ZM16 7H9V5H16V7Z" fill="currentColor"/>
-          </svg>
-          <p>No search record</p>
-        </div>
-      `;
+      // Clear search input and show navigation history on tab switch
       searchInput.value = '';
+      displayNavigationHistory();
 
       console.log('Map service switched to:', state.mapService);
     });
@@ -955,7 +1270,7 @@ document.addEventListener('DOMContentLoaded', () => {
         item.addEventListener('click', () => {
           state.selectedLocation = results[index];
           navButton.disabled = false;
-          setNavButtonContent(`Navigate to ${results[index].name}`);
+          setNavButtonContent('Start Navigation');
 
           // Highlight selected item
           resultsEl.querySelectorAll('.result-item').forEach(el => {

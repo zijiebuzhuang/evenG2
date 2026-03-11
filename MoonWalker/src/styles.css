@@ -218,7 +218,7 @@ body {
 .map-tabs {
   display: flex;
   gap: 2px;
-  margin-bottom: 0;
+  margin-bottom: 12px;
   padding: 2px;
   background: var(--bg-fourth);
   border-radius: 6px;
@@ -274,7 +274,7 @@ body {
 }
 
 .result-item {
-  padding: 12px 16px;
+  padding: 12px 4px;
   border-bottom: 1px solid var(--bg-second);
   cursor: pointer;
   transition: background 0.2s;
@@ -444,4 +444,366 @@ body {
 .nav-button:disabled svg,
 .nav-button:disabled span {
   color: var(--text-highlight);
+}
+
+.nav-button img {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+}
+
+/* Icon button */
+.icon-button {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.icon-button img {
+  display: block;
+}
+
+/* Header with icon button */
+.header {
+  position: relative;
+  justify-content: center;
+}
+
+.header .icon-button {
+  position: absolute;
+  right: 0;
+}
+
+.header h1 {
+  flex: 1;
+  text-align: center;
+}
+
+/* Settings page */
+.settings-page {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--bg-third);
+  z-index: 1000;
+  padding: 0 12px;
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  overflow-y: auto;
+}
+
+.settings-page.hidden {
+  display: none;
+}
+
+.settings-page .header .icon-button {
+  position: absolute;
+  left: 0;
+  right: auto;
+}
+
+/* Settings card */
+.settings-card {
+  background: var(--bg-first);
+  padding: 16px;
+  border-radius: 6px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  box-sizing: border-box;
+}
+
+.settings-card-icon {
+  flex-shrink: 0;
+}
+
+.settings-card-label {
+  flex: 1;
+  /* Normal Title */
+  font-size: 15px;
+  line-height: 19px;
+  letter-spacing: -0.15px;
+  font-weight: 400;
+  color: var(--text-first);
+}
+
+.toggle-switch {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.2s;
+}
+
+.toggle-switch:hover {
+  opacity: 0.8;
+}
+
+.toggle-switch:active {
+  opacity: 0.6;
+}
+
+.settings-description {
+  margin-top: 8px;
+  margin-bottom: 16px;
+  padding: 0 4px;
+  /* Normal Subtitle */
+  font-size: 13px;
+  line-height: 17px;
+  letter-spacing: -0.13px;
+  font-weight: 400;
+  color: var(--text-second);
+}
+
+.settings-value-button {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  /* Normal Title */
+  font-size: 15px;
+  line-height: 19px;
+  letter-spacing: -0.15px;
+  font-weight: 400;
+  color: var(--text-second);
+  transition: opacity 0.2s;
+}
+
+.settings-value-button:hover {
+  opacity: 0.8;
+}
+
+.settings-value-button:active {
+  opacity: 0.6;
+}
+
+/* Modal */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 2000;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  transition: opacity 0.3s;
+}
+
+.modal-overlay.hidden {
+  display: none;
+}
+
+.modal-content {
+  background: var(--bg-third);
+  border-radius: 6px 6px 0 0;
+  width: 100%;
+  max-width: 600px;
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.15);
+  animation: slideUp 0.3s ease-out;
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+.modal-header {
+  height: 46px;
+  padding: 0 16px;
+  margin: 12px 12px 0 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.modal-title {
+  /* Large Title (Title 1) */
+  font-size: 20px;
+  line-height: 26px;
+  letter-spacing: -0.6px;
+  font-weight: 400;
+  color: var(--text-first);
+  margin: 0;
+}
+
+.modal-close {
+  position: absolute;
+  right: 16px;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.2s;
+}
+
+.modal-close:hover {
+  opacity: 0.8;
+}
+
+.modal-close:active {
+  opacity: 0.6;
+}
+
+.modal-options {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px;
+  padding-bottom: 12px;
+}
+
+.modal-option {
+  background: var(--bg-first);
+  border: none;
+  border-radius: 6px;
+  padding: 16px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  /* Medium Title (Title 2) */
+  font-size: 17px;
+  line-height: 22px;
+  letter-spacing: -0.17px;
+  font-weight: 400;
+  color: var(--text-first);
+  cursor: pointer;
+  transition: opacity 0.2s;
+  text-align: left;
+}
+
+.modal-option:hover {
+  opacity: 0.8;
+}
+
+.modal-option:active {
+  opacity: 0.6;
+}
+
+.modal-option.selected::after {
+  content: '';
+  width: 24px;
+  height: 24px;
+  background-image: url('/check-icon.svg');
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  flex-shrink: 0;
+}
+
+.modal-footer {
+  padding: 0 12px 54px 12px;
+}
+
+.modal-confirm-button {
+  width: 100%;
+  height: 56px;
+  background: var(--bg-first);
+  border: none;
+  border-radius: 6px;
+  /* Medium Title */
+  font-size: 17px;
+  line-height: 22px;
+  letter-spacing: -0.17px;
+  font-weight: 400;
+  color: var(--text-first);
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.modal-confirm-button:hover {
+  opacity: 0.8;
+}
+
+.modal-confirm-button:active {
+  opacity: 0.6;
+}
+
+.content-sources-container {
+  background: var(--bg-first);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.source-option {
+  width: 100%;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--bg-second);
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  transition: opacity 0.2s;
+  text-align: left;
+}
+
+.source-option:last-child {
+  border-bottom: none;
+}
+
+.source-option:hover {
+  opacity: 0.8;
+}
+
+.source-option:active {
+  opacity: 0.6;
+}
+
+.source-option-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.source-option-title {
+  /* Normal Title */
+  font-size: 15px;
+  line-height: 19px;
+  letter-spacing: -0.15px;
+  font-weight: 400;
+  color: var(--text-first);
+}
+
+.source-option-subtitle {
+  /* Normal Subtitle */
+  font-size: 13px;
+  line-height: 17px;
+  letter-spacing: -0.13px;
+  font-weight: 400;
+  color: var(--text-second);
+}
+
+.source-check-icon {
+  flex-shrink: 0;
 }
