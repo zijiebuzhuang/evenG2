@@ -78,19 +78,22 @@ const WELCOME_TEXT_OBJECTS = [
     containerID: 1002,
     containerName: 'intro',
     isEventCapture: 1,
-    content: 'Navigate with clarity. Arrows point the way, distance keeps you informed. Search and go.'
+    content: 'Per Aspera ad Astra.'
   }
 ];
 
-function createWelcomeImageObject() {
-  return new ImageContainerProperty({
-    xPosition: 430,
-    yPosition: 90,
-    width: 70,
-    height: 70,
-    containerID: 1003,
-    containerName: 'icon'
-  });
+function createWelcomeImageObjects() {
+  return [
+    // Three icons combined (walk + footprint + love)
+    new ImageContainerProperty({
+      xPosition: 20,
+      yPosition: 150,
+      width: 150,
+      height: 35,
+      containerID: 1003,
+      containerName: 'icons'
+    })
+  ];
 }
 
 // --- App State ---
@@ -111,10 +114,12 @@ const state = {
   quoteDuration: 10, // Quote display duration in seconds (10, 30, 60, or 'always')
   contentSources: {
     stoic: true,
-    typefit: false,
-    hitokoto: false,
-    zenquotes: false
-  }
+    hitokoto: false
+  },
+  currentHeading: null, // Device heading in degrees (0-360, null if unavailable)
+  orientationSupported: false, // Whether orientation is available
+  mockLocationEnabled: false, // Use mock location instead of GPS
+  mockLocation: 'applepark' // Selected mock location (beijing, shanghai, shenzhen, applepark)
 };
 
 // Load navigation history from localStorage
@@ -218,22 +223,38 @@ function saveContentSourcesSetting() {
   }
 }
 
+// Load mock location setting from localStorage
+function loadMockLocationSetting() {
+  try {
+    const enabled = localStorage.getItem('mockLocationEnabled');
+    const location = localStorage.getItem('mockLocation');
+    if (enabled !== null) {
+      state.mockLocationEnabled = JSON.parse(enabled);
+    }
+    if (location !== null) {
+      state.mockLocation = location;
+    }
+  } catch (error) {
+    console.error('Failed to load mock location setting:', error);
+  }
+}
+
+// Save mock location setting to localStorage
+function saveMockLocationSetting() {
+  try {
+    localStorage.setItem('mockLocationEnabled', JSON.stringify(state.mockLocationEnabled));
+    localStorage.setItem('mockLocation', state.mockLocation);
+  } catch (error) {
+    console.error('Failed to save mock location setting:', error);
+  }
+}
+
 // Fetch stoic quote from stoic-quotes.com
 async function fetchStoicQuote() {
   const response = await fetch('https://stoic-quotes.com/api/quote');
   if (!response.ok) throw new Error('Stoic API failed');
   const data = await response.json();
   return `"${data.text}" — ${data.author}`;
-}
-
-// Fetch quote from type.fit
-async function fetchTypefitQuote() {
-  const response = await fetch('https://type.fit/api/quotes');
-  if (!response.ok) throw new Error('Type.fit API failed');
-  const data = await response.json();
-  const item = data[Math.floor(Math.random() * data.length)];
-  const author = item.author ? ` — ${item.author.replace(', type.fit', '')}` : '';
-  return `"${item.text}"${author}`;
 }
 
 // Fetch quote from hitokoto (anime/literary quotes)
@@ -243,14 +264,6 @@ async function fetchHitokotoQuote() {
   const data = await response.json();
   const author = data.from ? ` — ${data.from}` : '';
   return `"${data.hitokoto}"${author}`;
-}
-
-// Fetch quote from zenquotes
-async function fetchZenquoteQuote() {
-  const response = await fetch('https://zenquotes.io/api/random');
-  if (!response.ok) throw new Error('ZenQuotes API failed');
-  const data = await response.json();
-  return `"${data[0].q}" — ${data[0].a}`;
 }
 
 // Pick a random enabled source and fetch a quote
@@ -263,12 +276,19 @@ async function fetchQuoteFromEnabledSources() {
 
   const source = enabled[Math.floor(Math.random() * enabled.length)];
 
-  switch (source) {
-    case 'stoic':     return await fetchStoicQuote();
-    case 'typefit':   return await fetchTypefitQuote();
-    case 'hitokoto':  return await fetchHitokotoQuote();
-    case 'zenquotes': return await fetchZenquoteQuote();
-    default:          return '';
+  try {
+    console.log(`Fetching quote from: ${source}`);
+    let result;
+    switch (source) {
+      case 'stoic':     result = await fetchStoicQuote(); break;
+      case 'hitokoto':  result = await fetchHitokotoQuote(); break;
+      default:          result = '';
+    }
+    console.log(`Quote fetched from ${source}:`, result);
+    return result;
+  } catch (error) {
+    console.error(`Failed to fetch quote from ${source}:`, error);
+    throw error;
   }
 }
 
@@ -502,17 +522,57 @@ async function loadArrowIcon() {
 
 // Load and display icon on the glasses
 async function loadAndDisplayIcon() {
-  const iconData = await loadIconImage();
-  if (iconData) {
-    console.log('Loading icon, data length:', iconData.length);
+  // Load the 3-icon image (136x32)
+  const iconsData = await loadThreeIconsImage();
+  if (iconsData) {
+    console.log('Loading 3-icons, data length:', iconsData.length);
     const imageResult = await state.bridge.updateImageRawData({
       containerID: 1003,
-      containerName: 'icon',
-      imageData: iconData
+      containerName: 'icons',
+      imageData: iconsData
     });
-    console.log('Icon update result:', imageResult);
+    console.log('3-icons update result:', imageResult);
   } else {
-    console.error('Failed to load icon data');
+    console.error('Failed to load 3-icons data');
+  }
+}
+
+// Load three icons image (walk + footprint + love)
+async function loadThreeIconsImage() {
+  try {
+    const response = await fetch('/3iconwhite.png');
+    if (!response.ok) {
+      console.error('Failed to fetch 3icon:', response.status);
+      return null;
+    }
+    const blob = await response.blob();
+    console.log('3icon blob size:', blob.size, 'type:', blob.type);
+
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        console.log('3icon image size:', img.width, 'x', img.height);
+
+        // Create 150x35 canvas (matching container size)
+        const canvas = document.createElement('canvas');
+        canvas.width = 150;
+        canvas.height = 35;
+        const ctx = canvas.getContext('2d');
+
+        // Draw image
+        ctx.drawImage(img, 0, 0, 150, 35);
+
+        // Convert to base64
+        const base64 = canvas.toDataURL('image/png');
+        const base64Data = base64.split(',')[1];
+        resolve(base64Data);
+      };
+      img.onerror = reject;
+      img.src = URL.createObjectURL(blob);
+    });
+  } catch (error) {
+    console.error('Failed to load 3icon image:', error);
+    return null;
   }
 }
 
@@ -532,7 +592,7 @@ async function createInitialPage() {
     const result = await state.bridge.createStartUpPageContainer({
       containerTotalNum: 3,
       textObject: WELCOME_TEXT_OBJECTS,
-      imageObject: [createWelcomeImageObject()]
+      imageObject: createWelcomeImageObjects()
     });
 
     console.log('createStartUpPageContainer result:', result);
@@ -582,6 +642,76 @@ function updateStatus(message, type = 'info') {
       statusCardsEl.innerHTML = '';
     }, 300);
   }, 3000);
+}
+
+// Show status card with custom message and duration
+function showStatusCard(message, type = 'success', duration = 3000) {
+  const statusCardsEl = document.getElementById('statusCards');
+
+  const cardClass = type === 'success' ? 'success' : 'warning';
+  const icon = type === 'success' ? ICON_CONNECTED : ICON_DISCONNECTED;
+
+  statusCardsEl.innerHTML = `
+    <div class="status-card ${cardClass}">
+      ${icon}
+      <div class="status-card-content">
+        <span class="status-card-message ${cardClass}">${message}</span>
+      </div>
+    </div>
+  `;
+
+  // Show toast with animation
+  const card = statusCardsEl.querySelector('.status-card');
+  setTimeout(() => card.classList.add('show'), 10);
+
+  // Auto hide after specified duration
+  setTimeout(() => {
+    card.classList.remove('show');
+    setTimeout(() => {
+      statusCardsEl.innerHTML = '';
+    }, 300);
+  }, duration);
+}
+
+// Show location failed card with retry button
+function showLocationFailedCard() {
+  const statusCardsEl = document.getElementById('statusCards');
+
+  statusCardsEl.innerHTML = `
+    <div class="status-card warning">
+      ${ICON_DISCONNECTED}
+      <div class="status-card-content">
+        <span class="status-card-message warning">Location failed. Please enable GPS.</span>
+      </div>
+      <button class="status-card-retry" onclick="retryNavigation()">Try Again</button>
+    </div>
+  `;
+
+  const card = statusCardsEl.querySelector('.status-card');
+  setTimeout(() => card.classList.add('show'), 10);
+
+  // Auto hide after 3 seconds
+  setTimeout(() => {
+    card.classList.remove('show');
+    setTimeout(() => {
+      statusCardsEl.innerHTML = '';
+    }, 300);
+  }, 3000);
+}
+
+// Retry navigation after location failure
+async function retryNavigation() {
+  const statusCardsEl = document.getElementById('statusCards');
+  statusCardsEl.innerHTML = '';
+
+  try {
+    const location = await getUserLocation();
+    state.userLocation = location;
+    await startNavigationCore();
+  } catch (error) {
+    console.error('Retry failed:', error);
+    showLocationFailedCard();
+  }
 }
 
 // Search location using Amap API (China)
@@ -643,35 +773,101 @@ async function searchLocationPhoton(keyword) {
   }
 }
 
-// Get user's current location
-async function getUserLocation() {
-  return new Promise((resolve, reject) => {
-    if (!navigator.geolocation) {
-      // Fallback: use Apple Park coordinates
-      console.warn('Geolocation not supported, using mock location (Apple Park)');
-      resolve({ lng: -122.009, lat: 37.3349 });
-      return;
+// Preset locations for fallback
+const PRESET_LOCATIONS = [
+  { name: 'Beijing', lat: 39.9042, lng: 116.4074 },
+  { name: 'Shanghai', lat: 31.2304, lng: 121.4737 },
+  { name: 'Shenzhen', lat: 22.5431, lng: 114.0579 },
+  { name: 'Apple Park', lat: 37.3349, lng: -122.009 }
+];
+
+// Get preset location by key
+function getPresetLocation(key) {
+  const locations = {
+    beijing: PRESET_LOCATIONS[0],
+    shanghai: PRESET_LOCATIONS[1],
+    shenzhen: PRESET_LOCATIONS[2],
+    applepark: PRESET_LOCATIONS[3]
+  };
+  return locations[key] || locations.applepark;
+}
+
+// Initialize device orientation tracking (iOS/Android compatible)
+async function initOrientation() {
+  try {
+    // iOS 13+ permission request
+    if (typeof DeviceOrientationEvent !== 'undefined' &&
+        typeof DeviceOrientationEvent.requestPermission === 'function') {
+      const permission = await DeviceOrientationEvent.requestPermission();
+      if (permission !== 'granted') {
+        console.warn('Orientation permission denied');
+        return false;
+      }
     }
 
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        resolve({
-          lng: position.coords.longitude,
-          lat: position.coords.latitude
-        });
-      },
-      (error) => {
-        // Fallback on geolocation failure
-        console.warn('Geolocation failed, using mock location (Apple Park):', error);
-        resolve({ lng: -122.009, lat: 37.3349 });
-      },
-      {
-        enableHighAccuracy: true,
-        timeout: 5000,
-        maximumAge: 5000
+    // Check API support
+    if (typeof DeviceOrientationEvent === 'undefined') {
+      console.warn('DeviceOrientationEvent not supported');
+      return false;
+    }
+
+    // Listen for orientation changes
+    window.addEventListener('deviceorientation', (event) => {
+      // iOS: use webkitCompassHeading (true north)
+      if (typeof event.webkitCompassHeading === 'number') {
+        state.currentHeading = event.webkitCompassHeading;
       }
-    );
-  });
+      // Android: use alpha (magnetic north, needs reversal)
+      else if (typeof event.alpha === 'number') {
+        state.currentHeading = (360 - event.alpha) % 360;
+      }
+      else {
+        state.currentHeading = null;
+      }
+    }, true);
+
+    state.orientationSupported = true;
+    console.log('Orientation tracking initialized');
+    return true;
+  } catch (error) {
+    console.error('Orientation init failed:', error);
+    return false;
+  }
+}
+
+// Get user's current location with multi-layer fallback
+async function getUserLocation() {
+  // Priority 0: Mock location (if enabled in settings)
+  if (state.mockLocationEnabled) {
+    const mockLoc = getPresetLocation(state.mockLocation);
+    console.log('Using mock location:', mockLoc.name);
+    return { lat: mockLoc.lat, lng: mockLoc.lng };
+  }
+
+  // Priority 1: URL parameters (for simulator debugging)
+  const urlParams = new URLSearchParams(window.location.search);
+  const urlLat = urlParams.get('lat');
+  const urlLng = urlParams.get('lng');
+  if (urlLat && urlLng) {
+    console.log('Using location from URL parameters');
+    return { lat: parseFloat(urlLat), lng: parseFloat(urlLng) };
+  }
+
+  // Priority 2: Try navigator.geolocation (may crash on some G2 versions)
+  if (navigator.geolocation) {
+    const position = await new Promise((resolve, reject) => {
+      navigator.geolocation.getCurrentPosition(resolve, reject, {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 30000
+      });
+    });
+    console.log('Using GPS location');
+    return { lat: position.coords.latitude, lng: position.coords.longitude };
+  }
+
+  // Priority 3: No GPS available, throw error
+  throw new Error('GPS not available');
 }
 
 // Calculate bearing and distance between two coordinates
@@ -708,8 +904,18 @@ function calculateDirection(from, to) {
 }
 
 // Get direction arrow from bearing angle (8 directions)
+// If device heading available, calculate relative turn angle
 function getDirectionArrow(bearing) {
   const directions = ['↑', '↗', '→', '↘', '↓', '↙', '←', '↖'];
+
+  // If orientation available, calculate relative angle
+  if (state.currentHeading !== null) {
+    const turnAngle = (bearing - state.currentHeading + 360) % 360;
+    const index = Math.round(turnAngle / 45) % 8;
+    return directions[index];
+  }
+
+  // Fallback: use absolute bearing
   const index = Math.round(bearing / 45) % 8;
   return directions[index];
 }
@@ -820,7 +1026,7 @@ async function switchToNavigationMode() {
 }
 
 // Update distance text on glasses
-async function updateGlassesDisplay(arrow, distance) {
+async function updateGlassesDisplay(text) {
   if (!state.bridge || !state.isConnected || !state.pageCreated) return;
 
   try {
@@ -829,7 +1035,7 @@ async function updateGlassesDisplay(arrow, distance) {
       containerName: 'distance',
       contentOffset: 0,
       contentLength: 50,
-      content: distance
+      content: text
     });
   } catch (error) {
     console.error('Failed to update glasses:', error);
@@ -842,8 +1048,8 @@ function setNavButtonContent(label, isNavigating = false) {
   document.getElementById('navButton').innerHTML = `${icon}<span>${label}</span>`;
 }
 
-// Start navigation to selected location
-async function startNavigation() {
+// Start navigation to selected location (core logic)
+async function startNavigationCore() {
   if (!state.selectedLocation) return;
 
   try {
@@ -863,14 +1069,11 @@ async function startNavigation() {
     // Add to navigation history
     addToNavigationHistory(state.selectedLocation);
 
-    updateStatus('Getting location...', 'navigating');
-    state.userLocation = await getUserLocation();
     state.isNavigating = true;
 
     // Update button to show "Cancel Navigation"
     setNavButtonContent('Cancel Navigation', true);
 
-    updateStatus('Navigating', 'navigating');
     await switchToNavigationMode();
 
     // Update quote every 10 minutes (only if philosophy is enabled)
@@ -884,8 +1087,16 @@ async function startNavigation() {
     // Update direction and distance every 2 seconds
     state.navigationInterval = setInterval(async () => {
       try {
-        const currentLocation = await getUserLocation();
-        state.userLocation = currentLocation;
+        // During navigation, reuse last known location if GPS fails
+        let currentLocation;
+        try {
+          currentLocation = await getUserLocation();
+          state.userLocation = currentLocation;
+        } catch (error) {
+          console.warn('Location update failed, using last known location');
+          currentLocation = state.userLocation;
+          if (!currentLocation) return;
+        }
 
         const [toLng, toLat] = state.selectedLocation.location.split(',');
         const { bearing, distance } = calculateDirection(
@@ -893,14 +1104,22 @@ async function startNavigation() {
           { lng: toLng, lat: toLat }
         );
 
-        const arrow = getDirectionArrow(bearing);
         const distanceText = formatDistance(distance);
 
-        await updateGlassesDisplay(arrow, distanceText);
+        // If orientation available, show arrow; otherwise show bearing
+        let displayText;
+        if (state.currentHeading !== null) {
+          const arrow = getDirectionArrow(bearing);
+          displayText = `${arrow} ${distanceText}`;
+        } else {
+          displayText = `${Math.round(bearing)}° ${distanceText}`;
+        }
+
+        await updateGlassesDisplay(displayText);
 
         // Arrived (within 50m)
         if (distance < 50) {
-          await updateGlassesDisplay('✓', 'Arrived');
+          await updateGlassesDisplay('✓ Arrived');
           setTimeout(() => stopNavigation(), 3000);
         }
       } catch (error) {
@@ -932,15 +1151,24 @@ async function stopNavigation() {
   state.isNavigating = false;
 
   if (state.bridge && state.isConnected && state.pageCreated) {
-    // Rebuild page with welcome layout (including icon image)
-    await state.bridge.rebuildPageContainer(new RebuildPageContainer({
-      containerTotalNum: 3,
-      textObject: WELCOME_TEXT_OBJECTS,
-      imageObject: [createWelcomeImageObject()]
-    }));
+    try {
+      // Clear first to prevent ID conflicts between modes
+      await state.bridge.clearStartUpPageContainer();
 
-    // Reload icon
-    await loadAndDisplayIcon();
+      // Completely recreate initial page
+      const result = await state.bridge.createStartUpPageContainer({
+        containerTotalNum: 3,
+        textObject: WELCOME_TEXT_OBJECTS,
+        imageObject: createWelcomeImageObjects()
+      });
+
+      if (result === 0) {
+        // Reload icon
+        await loadAndDisplayIcon();
+      }
+    } catch (e) {
+      console.error('Failed to restore welcome page:', e);
+    }
   }
 
   // Update button based on whether location is selected
@@ -956,7 +1184,9 @@ function toggleNavigation() {
   if (state.isNavigating) {
     stopNavigation();
   } else {
-    startNavigation();
+    // Show permission modal before starting navigation
+    const permissionModal = document.getElementById('permissionModal');
+    permissionModal.classList.remove('hidden');
   }
 }
 
@@ -974,22 +1204,36 @@ document.addEventListener('DOMContentLoaded', () => {
   const durationButton = document.getElementById('durationButton');
   const durationValue = document.getElementById('durationValue');
   const durationModal = document.getElementById('durationModal');
-  const modalOptions = document.querySelectorAll('.modal-option');
+  const modalOptions = document.querySelectorAll('#durationModal .modal-option');
   const modalCloseButton = document.getElementById('modalCloseButton');
   const modalConfirmButton = document.getElementById('modalConfirmButton');
   const stoicToggle = document.getElementById('stoicOption');
-  const typefitToggle = document.getElementById('typefitOption');
   const hitokotoToggle = document.getElementById('hitokotoOption');
-  const zenquotesToggle = document.getElementById('zenquotesOption');
+  const permissionModal = document.getElementById('permissionModal');
+  const permissionCancelBtn = document.getElementById('permissionCancelBtn');
+  const permissionConfirmBtn = document.getElementById('permissionConfirmBtn');
+  const mockLocationToggle = document.getElementById('mockLocationToggle');
+  const mockLocationCard = document.getElementById('mockLocationCard');
+  const mockLocationButton = document.getElementById('mockLocationButton');
+  const mockLocationValue = document.getElementById('mockLocationValue');
+  const mockLocationModal = document.getElementById('mockLocationModal');
+  const mockLocationModalOptions = document.querySelectorAll('#mockLocationModal .modal-option');
+  const mockLocationModalCloseButton = document.getElementById('mockLocationModalCloseButton');
+  const mockLocationModalConfirmButton = document.getElementById('mockLocationModalConfirmButton');
 
   let searchTimeout;
   let tempSelectedDuration = null; // Temporary selection before confirmation
+  let tempSelectedMockLocation = null; // Temporary mock location selection
 
   // Load settings
   loadNavigationHistory();
   loadPhilosophySetting();
   loadQuoteDurationSetting();
   loadContentSourcesSetting();
+  loadMockLocationSetting();
+
+  // Initialize orientation tracking
+  initOrientation();
 
   // Update duration display
   function updateDurationDisplay() {
@@ -1018,9 +1262,38 @@ document.addEventListener('DOMContentLoaded', () => {
   // Initialize toggle UI
   updateToggleUI();
 
+  // Update mock location toggle UI
+  function updateMockLocationToggleUI() {
+    const toggleImg = mockLocationToggle.querySelector('img');
+    if (state.mockLocationEnabled) {
+      toggleImg.src = '/toggle-on.svg';
+      mockLocationToggle.dataset.enabled = 'true';
+      mockLocationCard.style.display = 'flex';
+    } else {
+      toggleImg.src = '/toggle-off.svg';
+      mockLocationToggle.dataset.enabled = 'false';
+      mockLocationCard.style.display = 'none';
+    }
+  }
+
+  // Update mock location display
+  function updateMockLocationDisplay() {
+    const locationNames = {
+      beijing: 'Beijing',
+      shanghai: 'Shanghai',
+      shenzhen: 'Shenzhen',
+      applepark: 'Apple Park'
+    };
+    mockLocationValue.textContent = locationNames[state.mockLocation] || 'Apple Park';
+  }
+
+  // Initialize mock location UI
+  updateMockLocationToggleUI();
+  updateMockLocationDisplay();
+
   // Update content source toggles UI
   function updateSourceTogglesUI() {
-    const toggles = { stoic: stoicToggle, typefit: typefitToggle, hitokoto: hitokotoToggle, zenquotes: zenquotesToggle };
+    const toggles = { stoic: stoicToggle, hitokoto: hitokotoToggle };
     Object.entries(toggles).forEach(([key, toggle]) => {
       const img = toggle.querySelector('img');
       if (state.contentSources[key]) {
@@ -1039,9 +1312,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Content source toggle handlers
   [
     { toggle: stoicToggle, key: 'stoic' },
-    { toggle: typefitToggle, key: 'typefit' },
-    { toggle: hitokotoToggle, key: 'hitokoto' },
-    { toggle: zenquotesToggle, key: 'zenquotes' }
+    { toggle: hitokotoToggle, key: 'hitokoto' }
   ].forEach(({ toggle, key }) => {
     toggle.addEventListener('click', () => {
       state.contentSources[key] = !state.contentSources[key];
@@ -1089,6 +1360,71 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       }
     }
+  });
+
+  // Mock location toggle handler
+  mockLocationToggle.addEventListener('click', () => {
+    state.mockLocationEnabled = !state.mockLocationEnabled;
+    saveMockLocationSetting();
+    updateMockLocationToggleUI();
+    console.log('Mock location:', state.mockLocationEnabled ? 'enabled' : 'disabled');
+  });
+
+  // Mock location button handler - open modal
+  mockLocationButton.addEventListener('click', () => {
+    tempSelectedMockLocation = state.mockLocation;
+    mockLocationModal.classList.remove('hidden');
+
+    // Update selected state
+    mockLocationModalOptions.forEach(option => {
+      const location = option.dataset.location;
+      if (location === state.mockLocation) {
+        option.classList.add('selected');
+      } else {
+        option.classList.remove('selected');
+      }
+    });
+  });
+
+  // Mock location modal option handlers
+  mockLocationModalOptions.forEach(option => {
+    option.addEventListener('click', () => {
+      const location = option.dataset.location;
+      tempSelectedMockLocation = location;
+
+      // Update UI to show selection
+      mockLocationModalOptions.forEach(opt => {
+        if (opt.dataset.location === location) {
+          opt.classList.add('selected');
+        } else {
+          opt.classList.remove('selected');
+        }
+      });
+    });
+  });
+
+  // Mock location modal confirm button
+  mockLocationModalConfirmButton.addEventListener('click', () => {
+    if (tempSelectedMockLocation !== null) {
+      state.mockLocation = tempSelectedMockLocation;
+      saveMockLocationSetting();
+      updateMockLocationDisplay();
+      console.log('Mock location set to:', state.mockLocation);
+    }
+    mockLocationModal.classList.add('hidden');
+  });
+
+  // Close mock location modal
+  mockLocationModal.addEventListener('click', (e) => {
+    if (e.target === mockLocationModal) {
+      mockLocationModal.classList.add('hidden');
+      tempSelectedMockLocation = null;
+    }
+  });
+
+  mockLocationModalCloseButton.addEventListener('click', () => {
+    mockLocationModal.classList.add('hidden');
+    tempSelectedMockLocation = null;
   });
 
   // Settings page navigation
@@ -1184,6 +1520,7 @@ document.addEventListener('DOMContentLoaded', () => {
             <div class="result-name">${result.name}</div>
             <div class="result-address">${result.address}</div>
           </div>
+          <img src="/check-icon.svg" class="result-item-check" width="24" height="24">
         </div>
       `).join('');
 
@@ -1262,6 +1599,7 @@ document.addEventListener('DOMContentLoaded', () => {
             <div class="result-name">${result.name}</div>
             <div class="result-address">${result.address}</div>
           </div>
+          <img src="/check-icon.svg" class="result-item-check" width="24" height="24">
         </div>
       `).join('');
 
@@ -1284,6 +1622,28 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Navigation button
   navButton.addEventListener('click', toggleNavigation);
+
+  // Permission modal handlers
+  permissionCancelBtn.addEventListener('click', () => {
+    permissionModal.classList.add('hidden');
+  });
+
+  permissionConfirmBtn.addEventListener('click', async () => {
+    permissionModal.classList.add('hidden');
+
+    // Request orientation permission (iOS 13+)
+    await initOrientation();
+
+    // Try to get location and start navigation
+    try {
+      const location = await getUserLocation();
+      state.userLocation = location;
+      await startNavigationCore();
+    } catch (error) {
+      console.error('Location failed:', error);
+      showLocationFailedCard();
+    }
+  });
 
   // Initialize bridge
   initBridge();

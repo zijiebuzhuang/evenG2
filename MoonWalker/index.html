@@ -70,7 +70,26 @@
 
       <!-- Settings Content -->
       <div class="configure-section">
-        <h2 class="section-title">Display</h2>
+        <h2 class="section-title">Location</h2>
+        <div class="settings-card" id="mockLocationToggleCard">
+          <img src="/location.svg" alt="Location" width="24" height="24" class="settings-card-icon">
+          <span class="settings-card-label">Use Mock Location</span>
+          <button class="toggle-switch" id="mockLocationToggle" data-enabled="false">
+            <img src="/toggle-off.svg" alt="Toggle" width="36" height="24">
+          </button>
+        </div>
+        <p class="settings-description">Use a preset location for testing when GPS is unavailable. Select location below.</p>
+
+        <div class="settings-card" id="mockLocationCard" style="display: none;">
+          <img src="/pin.svg" alt="Pin" width="24" height="24" class="settings-card-icon">
+          <span class="settings-card-label">Mock Location</span>
+          <button class="settings-value-button" id="mockLocationButton">
+            <span id="mockLocationValue">Apple Park</span>
+            <img src="/chevron-arrow.svg" alt="Arrow" width="24" height="24">
+          </button>
+        </div>
+
+        <h2 class="section-title" style="margin-top: 24px;">Display</h2>
         <div class="settings-card" id="philosophyToggleCard">
           <img src="/philosophy.svg" alt="Philosophy" width="24" height="24" class="settings-card-icon">
           <span class="settings-card-label">Show Quotes</span>
@@ -98,13 +117,6 @@
             </div>
             <img src="/checked.svg" alt="Checked" width="24" height="24" class="source-check-icon">
           </button>
-          <button class="source-option" id="typefitOption" data-checked="false">
-            <div class="source-option-text">
-              <span class="source-option-title">Type.fit Quotes</span>
-              <span class="source-option-subtitle">Inspirational quotes collection</span>
-            </div>
-            <img src="/unchecked.svg" alt="Unchecked" width="24" height="24" class="source-check-icon">
-          </button>
           <button class="source-option" id="hitokotoOption" data-checked="false">
             <div class="source-option-text">
               <span class="source-option-title">Hitokoto</span>
@@ -112,15 +124,37 @@
             </div>
             <img src="/unchecked.svg" alt="Unchecked" width="24" height="24" class="source-check-icon">
           </button>
-          <button class="source-option" id="zenquotesOption" data-checked="false">
-            <div class="source-option-text">
-              <span class="source-option-title">Zen Quotes</span>
-              <span class="source-option-subtitle">Mindfulness and meditation</span>
-            </div>
-            <img src="/unchecked.svg" alt="Unchecked" width="24" height="24" class="source-check-icon">
-          </button>
         </div>
         <p class="settings-description">Select multiple sources to randomly display different content during navigation.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Mock Location Picker Modal -->
+  <div class="modal-overlay hidden" id="mockLocationModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 class="modal-title">Mock Location</h3>
+        <button class="modal-close" id="mockLocationModalCloseButton">
+          <img src="/close-icon.svg" alt="Close" width="24" height="24">
+        </button>
+      </div>
+      <div class="modal-options">
+        <button class="modal-option" data-location="beijing">
+          <span>Beijing</span>
+        </button>
+        <button class="modal-option" data-location="shanghai">
+          <span>Shanghai</span>
+        </button>
+        <button class="modal-option" data-location="shenzhen">
+          <span>Shenzhen</span>
+        </button>
+        <button class="modal-option" data-location="applepark">
+          <span>Apple Park</span>
+        </button>
+      </div>
+      <div class="modal-footer">
+        <button class="modal-confirm-button" id="mockLocationModalConfirmButton">Confirm</button>
       </div>
     </div>
   </div>
@@ -157,6 +191,18 @@
   <!-- Status Cards (Toast) -->
   <div class="status-cards" id="statusCards">
     <!-- Status cards will be inserted here -->
+  </div>
+
+  <!-- Permission Request Modal -->
+  <div class="permission-modal-overlay hidden" id="permissionModal">
+    <div class="permission-modal">
+      <h3 class="permission-modal-title">Permission Required</h3>
+      <p class="permission-modal-description">To enable AR navigation with direction arrows, MoonWalker needs access to your location and compass. Please grant permissions to continue.</p>
+      <div class="permission-modal-buttons">
+        <button class="permission-modal-btn cancel" id="permissionCancelBtn">Cancel</button>
+        <button class="permission-modal-btn confirm" id="permissionConfirmBtn">Confirm</button>
+      </div>
+    </div>
   </div>
 
   <script type="module" src="/src/main.js"></script>
