@@ -50,49 +50,47 @@ const ICON_DISCONNECTED = `
     </defs>
   </svg>`;
 
-// --- Welcome Page Layout Config ---
-const WELCOME_TEXT_OBJECTS = [
-  {
-    xPosition: 20,
-    yPosition: 20,
-    width: 350,
-    height: 80,
-    borderWidth: 0,
-    borderColor: 0,
-    borderRdaius: 0,
-    paddingLength: 0,
-    containerID: 1001,
-    containerName: 'title',
-    isEventCapture: 0,
-    content: 'MoonWalker'
-  },
-  {
-    xPosition: 20,
-    yPosition: 80,
-    width: 350,
-    height: 150,
-    borderWidth: 0,
-    borderColor: 0,
-    borderRdaius: 0,
-    paddingLength: 0,
-    containerID: 1002,
-    containerName: 'intro',
-    isEventCapture: 1,
-    content: 'Per Aspera ad Astra.'
-  }
-];
+// Display position Y offsets for navigation page (G2 canvas: 576×288)
+const DISPLAY_POSITIONS = {
+  top: { navArrow: 20, navDistance: 20, navQuote: 220 },
+  middle: { navArrow: 100, navDistance: 100, navQuote: 220 },
+  bottom: { navArrow: 180, navDistance: 180, navQuote: 220 }
+};
 
-function createWelcomeImageObjects() {
+function getDisplayOffsets() {
+  return DISPLAY_POSITIONS[state.displayPosition] || DISPLAY_POSITIONS.top;
+}
+
+function createWelcomeTextObjects() {
   return [
-    // Three icons combined (walk + footprint + love)
-    new ImageContainerProperty({
+    {
       xPosition: 20,
-      yPosition: 150,
-      width: 150,
-      height: 35,
-      containerID: 1003,
-      containerName: 'icons'
-    })
+      yPosition: 20,
+      width: 480,
+      height: 80,
+      borderWidth: 0,
+      borderColor: 0,
+      borderRdaius: 0,
+      paddingLength: 0,
+      containerID: 1001,
+      containerName: 'title',
+      isEventCapture: 0,
+      content: 'MoonWalker'
+    },
+    {
+      xPosition: 20,
+      yPosition: 80,
+      width: 480,
+      height: 150,
+      borderWidth: 0,
+      borderColor: 0,
+      borderRdaius: 0,
+      paddingLength: 0,
+      containerID: 1002,
+      containerName: 'intro',
+      isEventCapture: 1,
+      content: 'Per Aspera ad Astra.'
+    }
   ];
 }
 
@@ -119,7 +117,8 @@ const state = {
   currentHeading: null, // Device heading in degrees (0-360, null if unavailable)
   orientationSupported: false, // Whether orientation is available
   mockLocationEnabled: false, // Use mock location instead of GPS
-  mockLocation: 'applepark' // Selected mock location (beijing, shanghai, shenzhen, applepark)
+  mockLocation: 'applepark', // Selected mock location (beijing, shanghai, shenzhen, applepark)
+  displayPosition: 'top' // Display position on G2 (top, middle, bottom)
 };
 
 // Load navigation history from localStorage
@@ -246,6 +245,27 @@ function saveMockLocationSetting() {
     localStorage.setItem('mockLocation', state.mockLocation);
   } catch (error) {
     console.error('Failed to save mock location setting:', error);
+  }
+}
+
+// Load display position setting from localStorage
+function loadDisplayPositionSetting() {
+  try {
+    const position = localStorage.getItem('displayPosition');
+    if (position !== null) {
+      state.displayPosition = position;
+    }
+  } catch (error) {
+    console.error('Failed to load display position setting:', error);
+  }
+}
+
+// Save display position setting to localStorage
+function saveDisplayPositionSetting() {
+  try {
+    localStorage.setItem('displayPosition', state.displayPosition);
+  } catch (error) {
+    console.error('Failed to save display position setting:', error);
   }
 }
 
@@ -400,88 +420,6 @@ async function initBridge() {
   }
 }
 
-// Load and convert icon image to base64, scaled to container size
-async function loadIconImage() {
-  try {
-    const response = await fetch('/moonwalker-icon.png');
-    if (!response.ok) {
-      console.error('Failed to fetch icon:', response.status);
-      return null;
-    }
-    const blob = await response.blob();
-    console.log('Icon blob size:', blob.size, 'type:', blob.type);
-
-    return new Promise((resolve, reject) => {
-      const img = new Image();
-      img.onload = () => {
-        console.log('Original image size:', img.width, 'x', img.height);
-
-        // Create 70x70 canvas (matching container size)
-        const canvas = document.createElement('canvas');
-        canvas.width = 70;
-        canvas.height = 70;
-        const ctx = canvas.getContext('2d');
-
-        // Draw scaled image (preserve transparency)
-        ctx.drawImage(img, 0, 0, 70, 70);
-
-        // Convert to PNG base64
-        const base64 = canvas.toDataURL('image/png');
-        console.log('Processed icon (70x70), base64 length:', base64.length);
-
-        // Strip data:image/png;base64, prefix
-        const base64Data = base64.split(',')[1];
-        resolve(base64Data);
-      };
-      img.onerror = reject;
-      img.src = URL.createObjectURL(blob);
-    });
-  } catch (error) {
-    console.error('Failed to load icon:', error);
-    return null;
-  }
-}
-
-// Load and convert navigation icon (SVG to base64)
-async function loadNavIcon() {
-  try {
-    const response = await fetch('/nav-icon.svg');
-    if (!response.ok) {
-      console.error('Failed to fetch nav icon:', response.status);
-      return null;
-    }
-    const svgText = await response.text();
-
-    return new Promise((resolve, reject) => {
-      const img = new Image();
-      img.onload = () => {
-        // Create 32x32 canvas
-        const canvas = document.createElement('canvas');
-        canvas.width = 32;
-        canvas.height = 32;
-        const ctx = canvas.getContext('2d');
-
-        // Fill white background to prevent transparency issues
-        ctx.fillStyle = '#FFFFFF';
-        ctx.fillRect(0, 0, 32, 32);
-
-        // Draw SVG
-        ctx.drawImage(img, 0, 0, 32, 32);
-
-        // Convert to PNG base64
-        const base64 = canvas.toDataURL('image/png');
-        const base64Data = base64.split(',')[1];
-        resolve(base64Data);
-      };
-      img.onerror = reject;
-      const blob = new Blob([svgText], { type: 'image/svg+xml' });
-      img.src = URL.createObjectURL(blob);
-    });
-  } catch (error) {
-    console.error('Failed to load nav icon:', error);
-    return null;
-  }
-}
 
 // Load arrow icon for navigation
 async function loadArrowIcon() {
@@ -520,62 +458,6 @@ async function loadArrowIcon() {
   }
 }
 
-// Load and display icon on the glasses
-async function loadAndDisplayIcon() {
-  // Load the 3-icon image (136x32)
-  const iconsData = await loadThreeIconsImage();
-  if (iconsData) {
-    console.log('Loading 3-icons, data length:', iconsData.length);
-    const imageResult = await state.bridge.updateImageRawData({
-      containerID: 1003,
-      containerName: 'icons',
-      imageData: iconsData
-    });
-    console.log('3-icons update result:', imageResult);
-  } else {
-    console.error('Failed to load 3-icons data');
-  }
-}
-
-// Load three icons image (walk + footprint + love)
-async function loadThreeIconsImage() {
-  try {
-    const response = await fetch('/3iconwhite.png');
-    if (!response.ok) {
-      console.error('Failed to fetch 3icon:', response.status);
-      return null;
-    }
-    const blob = await response.blob();
-    console.log('3icon blob size:', blob.size, 'type:', blob.type);
-
-    return new Promise((resolve, reject) => {
-      const img = new Image();
-      img.onload = () => {
-        console.log('3icon image size:', img.width, 'x', img.height);
-
-        // Create 150x35 canvas (matching container size)
-        const canvas = document.createElement('canvas');
-        canvas.width = 150;
-        canvas.height = 35;
-        const ctx = canvas.getContext('2d');
-
-        // Draw image
-        ctx.drawImage(img, 0, 0, 150, 35);
-
-        // Convert to base64
-        const base64 = canvas.toDataURL('image/png');
-        const base64Data = base64.split(',')[1];
-        resolve(base64Data);
-      };
-      img.onerror = reject;
-      img.src = URL.createObjectURL(blob);
-    });
-  } catch (error) {
-    console.error('Failed to load 3icon image:', error);
-    return null;
-  }
-}
-
 // Create initial welcome page on glasses
 async function createInitialPage() {
   try {
@@ -590,16 +472,15 @@ async function createInitialPage() {
     }
 
     const result = await state.bridge.createStartUpPageContainer({
-      containerTotalNum: 3,
-      textObject: WELCOME_TEXT_OBJECTS,
-      imageObject: createWelcomeImageObjects()
+      containerTotalNum: 2,
+      textObject: createWelcomeTextObjects(),
+      imageObject: []
     });
 
     console.log('createStartUpPageContainer result:', result);
     if (result === 0) {
       state.pageCreated = true;
       console.log('Initial page created successfully, pageCreated:', state.pageCreated);
-      await loadAndDisplayIcon();
     } else {
       console.error('Failed to create page, result code:', result);
     }
@@ -965,9 +846,10 @@ async function switchToNavigationMode() {
     }
 
     // Create arrow image container
+    const offsets = getDisplayOffsets();
     const arrowImageContainer = new ImageContainerProperty({
       xPosition: 20,
-      yPosition: 20,
+      yPosition: offsets.navArrow,
       width: 28,
       height: 28,
       containerID: 1001,
@@ -979,7 +861,7 @@ async function switchToNavigationMode() {
       textObject: [
         {
           xPosition: 72,
-          yPosition: 20,
+          yPosition: offsets.navDistance,
           width: 330,
           height: 80,
           borderWidth: 0,
@@ -993,7 +875,7 @@ async function switchToNavigationMode() {
         },
         {
           xPosition: 20,
-          yPosition: 220,
+          yPosition: offsets.navQuote,
           width: 480,
           height: 60,
           borderWidth: 0,
@@ -1157,14 +1039,13 @@ async function stopNavigation() {
 
       // Completely recreate initial page
       const result = await state.bridge.createStartUpPageContainer({
-        containerTotalNum: 3,
-        textObject: WELCOME_TEXT_OBJECTS,
-        imageObject: createWelcomeImageObjects()
+        containerTotalNum: 2,
+        textObject: createWelcomeTextObjects(),
+        imageObject: []
       });
 
       if (result === 0) {
-        // Reload icon
-        await loadAndDisplayIcon();
+        console.log('Welcome page restored');
       }
     } catch (e) {
       console.error('Failed to restore welcome page:', e);
@@ -1220,10 +1101,17 @@ document.addEventListener('DOMContentLoaded', () => {
   const mockLocationModalOptions = document.querySelectorAll('#mockLocationModal .modal-option');
   const mockLocationModalCloseButton = document.getElementById('mockLocationModalCloseButton');
   const mockLocationModalConfirmButton = document.getElementById('mockLocationModalConfirmButton');
+  const displayPositionButton = document.getElementById('displayPositionButton');
+  const displayPositionValue = document.getElementById('displayPositionValue');
+  const displayPositionModal = document.getElementById('displayPositionModal');
+  const displayPositionModalOptions = document.querySelectorAll('#displayPositionModal .modal-option');
+  const displayPositionModalCloseButton = document.getElementById('displayPositionModalCloseButton');
+  const displayPositionModalConfirmButton = document.getElementById('displayPositionModalConfirmButton');
 
   let searchTimeout;
   let tempSelectedDuration = null; // Temporary selection before confirmation
   let tempSelectedMockLocation = null; // Temporary mock location selection
+  let tempSelectedDisplayPosition = null; // Temporary display position selection
 
   // Load settings
   loadNavigationHistory();
@@ -1231,6 +1119,7 @@ document.addEventListener('DOMContentLoaded', () => {
   loadQuoteDurationSetting();
   loadContentSourcesSetting();
   loadMockLocationSetting();
+  loadDisplayPositionSetting();
 
   // Initialize orientation tracking
   initOrientation();
@@ -1290,6 +1179,15 @@ document.addEventListener('DOMContentLoaded', () => {
   // Initialize mock location UI
   updateMockLocationToggleUI();
   updateMockLocationDisplay();
+
+  // Update display position display
+  function updateDisplayPositionDisplay() {
+    const positionNames = { top: 'Top Left', middle: 'Middle Left', bottom: 'Bottom Left' };
+    displayPositionValue.textContent = positionNames[state.displayPosition] || 'Top Left';
+  }
+
+  // Initialize display position UI
+  updateDisplayPositionDisplay();
 
   // Update content source toggles UI
   function updateSourceTogglesUI() {
@@ -1425,6 +1323,168 @@ document.addEventListener('DOMContentLoaded', () => {
   mockLocationModalCloseButton.addEventListener('click', () => {
     mockLocationModal.classList.add('hidden');
     tempSelectedMockLocation = null;
+  });
+
+  // Display position button handler - open modal
+  displayPositionButton.addEventListener('click', () => {
+    tempSelectedDisplayPosition = state.displayPosition;
+    displayPositionModal.classList.remove('hidden');
+
+    displayPositionModalOptions.forEach(option => {
+      const position = option.dataset.position;
+      if (position === state.displayPosition) {
+        option.classList.add('selected');
+      } else {
+        option.classList.remove('selected');
+      }
+    });
+  });
+
+  // Display position modal option handlers
+  displayPositionModalOptions.forEach(option => {
+    option.addEventListener('click', () => {
+      tempSelectedDisplayPosition = option.dataset.position;
+      displayPositionModalOptions.forEach(o => o.classList.remove('selected'));
+      option.classList.add('selected');
+    });
+  });
+
+  // Display position modal confirm
+  displayPositionModalConfirmButton.addEventListener('click', async () => {
+    if (tempSelectedDisplayPosition !== null) {
+      state.displayPosition = tempSelectedDisplayPosition;
+      saveDisplayPositionSetting();
+      updateDisplayPositionDisplay();
+      console.log('Display position set to:', state.displayPosition);
+
+      // Apply immediately on G2 if connected
+      if (state.bridge && state.isConnected && state.pageCreated) {
+        try {
+          const offsets = getDisplayOffsets();
+          if (state.isNavigating) {
+            // Rebuild navigation page with new position
+            const arrowImageContainer = new ImageContainerProperty({
+              xPosition: 20,
+              yPosition: offsets.navArrow,
+              width: 28,
+              height: 28,
+              containerID: 1001,
+              containerName: 'arrow'
+            });
+            await state.bridge.rebuildPageContainer(new RebuildPageContainer({
+              containerTotalNum: 3,
+              textObject: [
+                {
+                  xPosition: 72,
+                  yPosition: offsets.navDistance,
+                  width: 330,
+                  height: 80,
+                  borderWidth: 0,
+                  borderColor: 0,
+                  borderRdaius: 0,
+                  paddingLength: 0,
+                  containerID: 1002,
+                  containerName: 'distance',
+                  isEventCapture: 1,
+                  content: 'Navigating...'
+                },
+                {
+                  xPosition: 20,
+                  yPosition: offsets.navQuote,
+                  width: 480,
+                  height: 60,
+                  borderWidth: 0,
+                  borderColor: 0,
+                  borderRdaius: 0,
+                  paddingLength: 0,
+                  containerID: 1003,
+                  containerName: 'quote',
+                  isEventCapture: 0,
+                  content: ''
+                }
+              ],
+              imageObject: [arrowImageContainer]
+            }));
+            const arrowIconData = await loadArrowIcon();
+            if (arrowIconData) {
+              await state.bridge.updateImageRawData({
+                containerID: 1001,
+                containerName: 'arrow',
+                imageData: arrowIconData
+              });
+            }
+          } else {
+            // Preview: rebuild with sample nav layout so user can see position
+            const arrowImageContainer = new ImageContainerProperty({
+              xPosition: 20,
+              yPosition: offsets.navArrow,
+              width: 28,
+              height: 28,
+              containerID: 1001,
+              containerName: 'arrow'
+            });
+            await state.bridge.rebuildPageContainer(new RebuildPageContainer({
+              containerTotalNum: 2,
+              textObject: [
+                {
+                  xPosition: 72,
+                  yPosition: offsets.navDistance,
+                  width: 330,
+                  height: 80,
+                  borderWidth: 0,
+                  borderColor: 0,
+                  borderRdaius: 0,
+                  paddingLength: 0,
+                  containerID: 1002,
+                  containerName: 'distance',
+                  isEventCapture: 0,
+                  content: '120m'
+                }
+              ],
+              imageObject: [arrowImageContainer]
+            }));
+            const arrowIconData = await loadArrowIcon();
+            if (arrowIconData) {
+              await state.bridge.updateImageRawData({
+                containerID: 1001,
+                containerName: 'arrow',
+                imageData: arrowIconData
+              });
+            }
+            // Restore welcome page after 3 seconds
+            setTimeout(async () => {
+              if (!state.isNavigating && state.bridge && state.isConnected) {
+                try {
+                  await state.bridge.rebuildPageContainer(new RebuildPageContainer({
+                    containerTotalNum: 2,
+                    textObject: createWelcomeTextObjects(),
+                    imageObject: []
+                  }));
+                } catch (e) {
+                  console.error('Failed to restore welcome page:', e);
+                }
+              }
+            }, 3000);
+          }
+        } catch (e) {
+          console.error('Failed to rebuild page with new position:', e);
+        }
+      }
+    }
+    displayPositionModal.classList.add('hidden');
+  });
+
+  // Close display position modal
+  displayPositionModal.addEventListener('click', (e) => {
+    if (e.target === displayPositionModal) {
+      displayPositionModal.classList.add('hidden');
+      tempSelectedDisplayPosition = null;
+    }
+  });
+
+  displayPositionModalCloseButton.addEventListener('click', () => {
+    displayPositionModal.classList.add('hidden');
+    tempSelectedDisplayPosition = null;
   });
 
   // Settings page navigation

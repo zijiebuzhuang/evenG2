@@ -81,7 +81,7 @@
         <p class="settings-description">Use a preset location for testing when GPS is unavailable. Select location below.</p>
 
         <div class="settings-card" id="mockLocationCard" style="display: none;">
-          <img src="/pin.svg" alt="Pin" width="24" height="24" class="settings-card-icon">
+          <img src="/mocklocation.svg" alt="Pin" width="24" height="24" class="settings-card-icon">
           <span class="settings-card-label">Mock Location</span>
           <button class="settings-value-button" id="mockLocationButton">
             <span id="mockLocationValue">Apple Park</span>
@@ -108,6 +108,16 @@
           </button>
         </div>
 
+        <div class="settings-card" style="margin-top: 6px;">
+          <img src="/position.svg" alt="Position" width="24" height="24" class="settings-card-icon">
+          <span class="settings-card-label">Display Position</span>
+          <button class="settings-value-button" id="displayPositionButton">
+            <span id="displayPositionValue">Top Left</span>
+            <img src="/chevron-arrow.svg" alt="Arrow" width="24" height="24">
+          </button>
+        </div>
+        <p class="settings-description">Adjust where navigation info appears on the G2 glasses display.</p>
+
         <h2 class="section-title" style="margin-top: 24px;">Quote Source</h2>
         <div class="content-sources-container">
           <button class="source-option" id="stoicOption" data-checked="true">
@@ -126,6 +136,18 @@
           </button>
         </div>
         <p class="settings-description">Select multiple sources to randomly display different content during navigation.</p>
+
+        <h2 class="section-title" style="margin-top: 24px;">About</h2>
+        <div class="about-card">
+          <div class="about-card-header">
+            <img src="/moonwalker-icon.png" alt="MoonWalker" width="40" height="40" class="about-card-icon">
+            <div class="about-card-info">
+              <span class="about-card-name">MoonWalker</span>
+              <span class="about-card-version">v1.3.0</span>
+            </div>
+          </div>
+          <p class="about-card-description">A minimal AR navigation app for Even G2 glasses. Walk to your destination with direction and distance displayed right in your view.</p>
+        </div>
       </div>
     </div>
   </div>
@@ -184,6 +206,32 @@
       </div>
       <div class="modal-footer">
         <button class="modal-confirm-button" id="modalConfirmButton">Confirm</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Display Position Picker Modal -->
+  <div class="modal-overlay hidden" id="displayPositionModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 class="modal-title">Display Position</h3>
+        <button class="modal-close" id="displayPositionModalCloseButton">
+          <img src="/close-icon.svg" alt="Close" width="24" height="24">
+        </button>
+      </div>
+      <div class="modal-options">
+        <button class="modal-option" data-position="top">
+          <span>Top Left</span>
+        </button>
+        <button class="modal-option" data-position="middle">
+          <span>Middle Left</span>
+        </button>
+        <button class="modal-option" data-position="bottom">
+          <span>Bottom Left</span>
+        </button>
+      </div>
+      <div class="modal-footer">
+        <button class="modal-confirm-button" id="displayPositionModalConfirmButton">Confirm</button>
       </div>
     </div>
   </div>

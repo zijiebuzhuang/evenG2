@@ -193,10 +193,6 @@ body {
   flex-direction: column;
   align-items: center;
   gap: 8px;
-  color: var(--text-first);
-}
-
-.empty-state.secondary {
   color: var(--text-second);
 }
 
@@ -541,6 +537,12 @@ body {
   padding-top: env(safe-area-inset-top);
   padding-bottom: env(safe-area-inset-bottom);
   overflow-y: auto;
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.settings-page::-webkit-scrollbar {
+  display: none;
 }
 
 .settings-page.hidden {
@@ -960,4 +962,54 @@ body {
 
 .permission-modal-btn:active {
   opacity: 0.6;
+}
+
+/* About card */
+.about-card {
+  background: var(--bg-first);
+  padding: 16px;
+  border-radius: 6px;
+}
+
+.about-card-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.about-card-icon {
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
+.about-card-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.about-card-name {
+  font-size: 15px;
+  line-height: 19px;
+  letter-spacing: -0.15px;
+  font-weight: 400;
+  color: var(--text-first);
+}
+
+.about-card-version {
+  font-size: 13px;
+  line-height: 17px;
+  letter-spacing: -0.13px;
+  font-weight: 400;
+  color: var(--text-second);
+}
+
+.about-card-description {
+  font-size: 13px;
+  line-height: 17px;
+  letter-spacing: -0.13px;
+  font-weight: 400;
+  color: var(--text-second);
+  margin: 0;
 }
