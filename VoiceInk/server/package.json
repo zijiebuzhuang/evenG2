@@ -1,0 +1,14 @@
+{
+  "name": "voiceink-server",
+  "version": "0.1.0",
+  "description": "VoiceInk 后端 - WebSocket + 百度 ASR",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "baidu-aip-sdk": "^4.16.13",
+    "dotenv": "^16.3.1",
+    "ws": "^8.16.0"
+  }
+}

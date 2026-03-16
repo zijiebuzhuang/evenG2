@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>VoiceInk</title>
+  <link rel="stylesheet" href="/src/styles.css">
+</head>
+<body>
+  <div class="container">
+    <div class="content-wrapper">
+      <!-- Header -->
+      <div class="header">
+        <h1>VoiceInk</h1>
+        <button class="icon-button" id="settingsButton">
+          <img src="/settings.svg" alt="Settings" width="24" height="24">
+        </button>
+      </div>
+
+      <!-- Recording Card -->
+      <div class="recording-card" id="recordingCard">
+        <div class="recording-card-top">
+          <span class="recording-title" id="recordingTitle">
+            <span class="connection-dot" id="connectionDot"></span>
+            <span id="recordingTitleText">Not Connected</span>
+          </span>
+          <div class="recording-duration">
+            <span class="duration-dot" id="durationDot"></span>
+            <span class="duration-text" id="durationText">00:00:00</span>
+          </div>
+        </div>
+        <span class="recording-start-time" id="recordingStartTime"></span>
+      </div>
+
+      <!-- Tab Bar -->
+      <div class="tab-bar">
+        <button class="tab-item active" id="tabBaidu">Baidu ASR</button>
+        <button class="tab-item" id="tabWhisper">OpenAI Whisper</button>
+      </div>
+
+      <!-- Transcript (visible during recording) -->
+      <div class="configure-section" id="transcriptSection" style="display:none;">
+        <div class="transcript-container" id="transcriptContainer">
+          <div class="transcript-list" id="transcriptList"></div>
+        </div>
+      </div>
+
+      <!-- Recording History (visible when stopped) -->
+      <div class="configure-section" id="historySection">
+        <div class="history-container" id="historyContainer">
+          <div class="history-list" id="historyList"></div>
+        </div>
+      </div>
+
+      <!-- Buttons -->
+      <div class="button-container" id="buttonContainer">
+        <button class="action-button primary" id="recordButton">
+          <img src="/start.svg" alt="Start" width="24" height="24">
+          <span id="recordLabel">Start Recording</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Recording Detail Page -->
+  <div class="settings-page hidden" id="detailPage">
+    <div class="content-wrapper">
+      <div class="header">
+        <button class="icon-button" id="detailBackButton">
+          <img src="/chevronBack.svg" alt="Back" width="24" height="24">
+        </button>
+        <h1 id="detailTitle"></h1>
+      </div>
+
+      <div class="configure-section">
+        <div class="transcript-container">
+          <div class="transcript-list" id="detailTranscriptList"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings Page -->
+  <div class="settings-page hidden" id="settingsPage">
+    <div class="content-wrapper">
+      <div class="header">
+        <button class="icon-button" id="backButton">
+          <img src="/chevronBack.svg" alt="Back" width="24" height="24">
+        </button>
+        <h1>Settings</h1>
+      </div>
+
+      <div class="configure-section">
+        <h2 class="section-title">Server</h2>
+        <div class="main-card">
+          <input type="text" class="input-box" id="wsUrlInput" placeholder="ws://localhost:8080" value="ws://localhost:8080">
+        </div>
+
+        <h2 class="section-title" style="margin-top: 24px;">About</h2>
+        <div class="main-card about-card">
+          <p>VoiceInk v0.1.0</p>
+          <p class="hint">Chinese STT for Even G2</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
