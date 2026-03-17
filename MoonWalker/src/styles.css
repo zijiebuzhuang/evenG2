@@ -169,7 +169,7 @@ body {
 .results {
   margin-top: 16px;
   flex: 1;
-  overflow-y: auto;
+  overflow-y: scroll;
   display: flex;
   flex-direction: column;
 }
@@ -536,7 +536,7 @@ body {
   padding: 0 12px;
   padding-top: env(safe-area-inset-top);
   padding-bottom: env(safe-area-inset-bottom);
-  overflow-y: auto;
+  overflow-y: scroll;
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
