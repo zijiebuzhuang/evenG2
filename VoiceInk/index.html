@@ -35,7 +35,7 @@
       <!-- Tab Bar -->
       <div class="tab-bar">
         <button class="tab-item active" id="tabBaidu">Baidu ASR</button>
-        <button class="tab-item" id="tabWhisper">OpenAI Whisper</button>
+        <button class="tab-item" id="tabWhisper">Groq Whisper</button>
       </div>
 
       <!-- Transcript (visible during recording) -->
@@ -91,9 +91,14 @@
       </div>
 
       <div class="configure-section">
-        <h2 class="section-title">Server</h2>
+        <h2 class="section-title">Groq Whisper</h2>
         <div class="main-card">
-          <input type="text" class="input-box" id="wsUrlInput" placeholder="ws://localhost:8080" value="ws://localhost:8080">
+          <input type="password" class="input-box" id="whisperKeyInput" placeholder="gsk_...">
+        </div>
+        <div class="steps-hint">
+          <p>1. Go to <span class="link-text" id="openaiLink">console.groq.com</span></p>
+          <p>2. Sign in and navigate to API Keys</p>
+          <p>3. Create a new secret key and paste it above</p>
         </div>
 
         <h2 class="section-title" style="margin-top: 24px;">About</h2>

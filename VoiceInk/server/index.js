@@ -1,14 +1,15 @@
 require('dotenv').config();
 const WebSocket = require('ws');
 const { BaiduSTT } = require('./stt-baidu');
+const { OpenAISTT } = require('./stt-openai');
 
 const PORT = process.env.WS_PORT || 8080;
 
 // 停顿检测参数
 const SAMPLE_RATE = 16000;
 const BYTES_PER_SAMPLE = 2; // 16-bit PCM
-const SILENCE_RMS_THRESHOLD = 300; // RMS 低于此值视为静音
-const SILENCE_DURATION_MS = 1500; // 连续静音 1.5 秒触发识别
+const SILENCE_RMS_THRESHOLD = 150; // RMS 低于此值视为静音
+const SILENCE_DURATION_MS = 1000; // 连续静音 1 秒触发识别
 const MAX_SEGMENT_MS = 10000; // 最长 10 秒强制识别
 
 const stt = new BaiduSTT(
@@ -19,6 +20,17 @@ const stt = new BaiduSTT(
 
 const wss = new WebSocket.Server({ port: PORT });
 console.log(`VoiceInk server running on ws://localhost:${PORT}`);
+
+// Whisper hallucination filter
+const WHISPER_HALLUCINATIONS = [
+  '请不吝点赞', '订阅', '转发', '打赏支持', '明镜与点点',
+  '感谢观看', '谢谢大家', '字幕由', 'Amara.org', 'Subtitles by',
+  '请订阅我的频道', '下期再见',
+];
+
+function isHallucination(text) {
+  return WHISPER_HALLUCINATIONS.some(h => text.includes(h));
+}
 
 const SENTENCE_DELIMITERS = /[。！？；\n]/;
 
@@ -39,6 +51,12 @@ wss.on('connection', (ws) => {
   let recording = false;
   let transcribing = false;
 
+  // Engine selection
+  let currentEngine = 'baidu';
+  let whisperSTT = process.env.OPENAI_API_KEY
+    ? new OpenAISTT(process.env.OPENAI_API_KEY)
+    : null;
+
   // 停顿检测状态
   let silenceStart = null; // 静音开始时间
   let segmentStart = null; // 当前片段开始时间
@@ -52,13 +70,23 @@ wss.on('connection', (ws) => {
     audioBuffer = [];
     audioBytes = 0;
     segmentStart = Date.now();
-    console.log(`Transcribing ${pcm.length} bytes...`);
+
+    // Skip if audio is too quiet (likely silence → Whisper will hallucinate)
+    const segmentRMS = calcRMS(pcm);
+    if (segmentRMS < SILENCE_RMS_THRESHOLD) {
+      console.log(`Skipping silent segment (RMS: ${segmentRMS.toFixed(0)})`);
+      transcribing = false;
+      return;
+    }
+
+    console.log(`Transcribing ${pcm.length} bytes (RMS: ${segmentRMS.toFixed(0)})...`);
 
     try {
-      const text = await stt.transcribe(pcm);
+      const engine = currentEngine === 'whisper' && whisperSTT ? whisperSTT : stt;
+      const text = await engine.transcribe(pcm);
       console.log(`STT result: "${text}"`);
 
-      if (text && text.trim()) {
+      if (text && text.trim() && !isHallucination(text.trim())) {
         const segments = splitSentences(text.trim());
         for (const sentence of segments.complete) {
           ws.send(JSON.stringify({ type: 'transcription', text: sentence }));
@@ -132,9 +160,22 @@ wss.on('connection', (ws) => {
         audioBytes = 0;
         recording = true;
         transcribing = false;
+        if (msg.engine) currentEngine = msg.engine;
+
+        if (currentEngine === 'whisper' && !whisperSTT) {
+          ws.send(JSON.stringify({ type: 'error', message: 'No Groq API key configured. Add it in Settings.' }));
+          recording = false;
+          return;
+        }
+
         ws.send(JSON.stringify({ type: 'status', status: 'recording' }));
         startDetection();
-        console.log('Recording started');
+        console.log(`Recording started (engine: ${currentEngine})`);
+      } else if (msg.type === 'set_whisper_key') {
+        if (msg.key) {
+          whisperSTT = new OpenAISTT(msg.key);
+          console.log('Whisper API key updated');
+        }
       } else if (msg.type === 'audio_stop') {
         recording = false;
         stopDetection();

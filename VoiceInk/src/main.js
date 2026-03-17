@@ -6,13 +6,14 @@ let ws = null;
 let wsConnected = false;
 let recordingState = 'stopped'; // 'recording' | 'paused' | 'stopped'
 let audioChunks = [];
-let autoStopTimer = null;
+
 let transcripts = []; // { text, offsetMs }
 let recordings = JSON.parse(localStorage.getItem('voiceink_recordings') || '[]');
 let wsUrl = localStorage.getItem('voiceink_ws_url') || 'ws://localhost:8080';
+let activeEngine = 'baidu';
 let reconnectAttempts = 0;
 const MAX_RECONNECT = 10;
-const MAX_RECORDING_MS = 30000;
+
 const CHUNK_INTERVAL = 20;
 
 // Recording timer state
@@ -49,23 +50,24 @@ const detailBackButton = document.getElementById('detailBackButton');
 const detailTitle = document.getElementById('detailTitle');
 const detailTranscriptList = document.getElementById('detailTranscriptList');
 const buttonContainer = document.getElementById('buttonContainer');
-const wsUrlInput = document.getElementById('wsUrlInput');
+const whisperKeyInput = document.getElementById('whisperKeyInput');
 const tabBaidu = document.getElementById('tabBaidu');
 const tabWhisper = document.getElementById('tabWhisper');
 
 // --- Page Navigation ---
 settingsButton.addEventListener('click', () => {
   settingsPage.classList.remove('hidden');
-  wsUrlInput.value = wsUrl;
+  whisperKeyInput.value = localStorage.getItem('voiceink_whisper_key') || '';
 });
 
 backButton.addEventListener('click', () => {
   settingsPage.classList.add('hidden');
-  const newUrl = wsUrlInput.value.trim();
-  if (newUrl && newUrl !== wsUrl) {
-    wsUrl = newUrl;
-    localStorage.setItem('voiceink_ws_url', wsUrl);
-    connectWebSocket();
+  const newKey = whisperKeyInput.value.trim();
+  const oldKey = localStorage.getItem('voiceink_whisper_key') || '';
+  if (newKey !== oldKey) {
+    localStorage.setItem('voiceink_whisper_key', newKey);
+    if (newKey) sendWhisperKey(newKey);
+    if (activeEngine === 'whisper' && recordingState === 'stopped') renderHistory();
   }
 });
 
@@ -103,19 +105,34 @@ function renderHistory() {
   const container = document.getElementById('historyContainer');
   historyList.innerHTML = '';
 
-  if (recordings.length === 0) {
+  const filtered = recordings.filter(r => (r.engine || 'baidu') === activeEngine);
+
+  if (filtered.length === 0) {
     container.classList.add('empty');
-    historyList.innerHTML = `
-      <div class="empty-state">
-        <img src="/nohistory.svg" width="32" height="32">
-        <p>No recordings</p>
-      </div>`;
+    if (activeEngine === 'whisper') {
+      const hasKey = !!localStorage.getItem('voiceink_whisper_key');
+      historyList.innerHTML = `
+        <div class="empty-state">
+          <img src="/nohistory.svg" width="32" height="32">
+          <p>No recordings</p>
+          ${hasKey ? '' : '<p class="empty-hint">Add your Groq API Key in Settings to get started</p>'}
+          ${hasKey ? '' : '<button class="empty-settings-btn" id="emptySettingsBtn">Go to Settings</button>'}
+        </div>`;
+      const btn = document.getElementById('emptySettingsBtn');
+      if (btn) btn.addEventListener('click', () => settingsButton.click());
+    } else {
+      historyList.innerHTML = `
+        <div class="empty-state">
+          <img src="/nohistory.svg" width="32" height="32">
+          <p>No recordings</p>
+        </div>`;
+    }
     return;
   }
 
   container.classList.remove('empty');
 
-  recordings.forEach((record) => {
+  filtered.forEach((record) => {
     const wrapper = document.createElement('div');
     wrapper.className = 'history-item-wrapper';
 
@@ -205,6 +222,8 @@ function connectWebSocket() {
     reconnectAttempts = 0;
     wsConnected = true;
     updateConnectionStatus();
+    const savedKey = localStorage.getItem('voiceink_whisper_key');
+    if (savedKey) sendWhisperKey(savedKey);
   };
 
   ws.onmessage = (event) => {
@@ -240,6 +259,10 @@ function wsSend(obj) {
 
 function wsSendBinary(data) {
   if (ws?.readyState === WebSocket.OPEN) ws.send(data);
+}
+
+function sendWhisperKey(key) {
+  wsSend({ type: 'set_whisper_key', key });
 }
 
 // --- Utility Functions ---
@@ -365,6 +388,7 @@ function saveRecording() {
     title,
     startTime: recordingStartTime,
     duration: elapsedSeconds,
+    engine: activeEngine,
     transcripts: [...transcripts],
   };
 
@@ -384,7 +408,7 @@ async function startRecording() {
   pauseStartTime = null;
   recordingStartTime = Date.now();
 
-  wsSend({ type: 'audio_start' });
+  wsSend({ type: 'audio_start', engine: activeEngine });
 
   if (bridge) {
     bridge.audioControl(true);
@@ -404,7 +428,6 @@ async function startRecording() {
   startDurationTimer();
   updateTabs();
 
-  autoStopTimer = setTimeout(() => stopRecording(), MAX_RECORDING_MS);
   updateG2Display();
 }
 
@@ -413,7 +436,6 @@ function pauseRecording() {
   recordingState = 'paused';
   pauseStartTime = Date.now();
 
-  if (autoStopTimer) { clearTimeout(autoStopTimer); autoStopTimer = null; }
   stopDurationTimer();
 
   if (bridge) {
@@ -445,7 +467,7 @@ async function resumeRecording() {
     pauseStartTime = null;
   }
 
-  wsSend({ type: 'audio_start' });
+  wsSend({ type: 'audio_start', engine: activeEngine });
 
   if (bridge) {
     bridge.audioControl(true);
@@ -457,7 +479,6 @@ async function resumeRecording() {
   updateButtons();
   startDurationTimer();
 
-  autoStopTimer = setTimeout(() => stopRecording(), MAX_RECORDING_MS);
   updateG2Display();
 }
 
@@ -467,7 +488,6 @@ function stopRecording() {
   const wasRecording = recordingState === 'recording';
   recordingState = 'stopped';
 
-  if (autoStopTimer) { clearTimeout(autoStopTimer); autoStopTimer = null; }
   stopDurationTimer();
 
   if (wasRecording) {
@@ -613,7 +633,7 @@ function buildWelcomePage() {
     textObject: [{
       xPosition: 20, yPosition: 20, width: 536, height: 248,
       containerID: 1001, containerName: 'welcome',
-      content: 'VoiceInk\n\nLet voice flow like ink.\n\nTap to start recording.',
+      content: 'VoiceInk\n\nTap to record\nDouble-tap to pause / stop',
       isEventCapture: 1,
       borderWidth: 0, borderColor: 0, borderRdaius: 0, paddingLength: 12,
     }]
@@ -658,23 +678,34 @@ async function updateG2Display() {
 
 // --- G2 Events ---
 function handleG2Event(event) {
-  const ev = event.textEvent || event.listEvent;
-  if (!ev) {
-    // 音频事件
-    if (event.audioEvent?.audioPcm) {
-      handleAudioData(event.audioEvent.audioPcm);
-      return;
-    }
+  // 音频事件
+  if (event.audioEvent?.audioPcm) {
+    handleAudioData(event.audioEvent.audioPcm);
     return;
   }
 
-  const eventType = ev.eventType;
+  const ev = event.textEvent || event.listEvent || event.sysEvent;
+  if (!ev) return;
 
-  // 单击：三态切换
-  if (eventType === 0) {
+  // 解析点击类型（兼容 SDK eventType 归一化 bug：0 → undefined）
+  const raw = ev.eventType;
+  let isClick = (raw === 0 || raw === undefined);
+  let isDoubleClick = (raw === 3);
+  if (typeof raw === 'string') {
+    const v = raw.toUpperCase();
+    if (v.includes('DOUBLE')) { isDoubleClick = true; isClick = false; }
+    else if (v.includes('CLICK')) { isClick = true; }
+  }
+
+  // 单击：开始 / 恢复
+  if (isClick) {
     if (recordingState === 'stopped') startRecording();
-    else if (recordingState === 'recording') pauseRecording();
     else if (recordingState === 'paused') resumeRecording();
+  }
+  // 双击：暂停 / 结束
+  if (isDoubleClick) {
+    if (recordingState === 'recording') pauseRecording();
+    else if (recordingState === 'paused') stopRecording();
   }
 }
 
@@ -691,13 +722,19 @@ function updateTabs() {
 }
 
 tabBaidu.addEventListener('click', () => {
+  if (tabBaidu.classList.contains('disabled')) return;
   tabBaidu.classList.add('active');
   tabWhisper.classList.remove('active');
+  activeEngine = 'baidu';
+  if (recordingState === 'stopped') renderHistory();
 });
 
 tabWhisper.addEventListener('click', () => {
+  if (tabWhisper.classList.contains('disabled')) return;
   tabWhisper.classList.add('active');
   tabBaidu.classList.remove('active');
+  activeEngine = 'whisper';
+  if (recordingState === 'stopped') renderHistory();
 });
 
 // --- Init ---
