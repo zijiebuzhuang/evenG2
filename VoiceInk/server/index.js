@@ -1,6 +1,6 @@
 require('dotenv').config();
 const WebSocket = require('ws');
-const { BaiduSTT } = require('./stt-baidu');
+const { IflytekRealtimeSTT } = require('./stt-iflytek-realtime');
 const { OpenAISTT } = require('./stt-openai');
 
 const PORT = process.env.WS_PORT || 8080;
@@ -11,12 +11,6 @@ const BYTES_PER_SAMPLE = 2; // 16-bit PCM
 const SILENCE_RMS_THRESHOLD = 150; // RMS 低于此值视为静音
 const SILENCE_DURATION_MS = 1000; // 连续静音 1 秒触发识别
 const MAX_SEGMENT_MS = 10000; // 最长 10 秒强制识别
-
-const stt = new BaiduSTT(
-  process.env.BAIDU_APP_ID,
-  process.env.BAIDU_API_KEY,
-  process.env.BAIDU_SECRET_KEY
-);
 
 const wss = new WebSocket.Server({ port: PORT });
 console.log(`VoiceInk server running on ws://localhost:${PORT}`);
@@ -52,10 +46,13 @@ wss.on('connection', (ws) => {
   let transcribing = false;
 
   // Engine selection
-  let currentEngine = 'baidu';
+  let currentEngine = 'iflytek';
   let whisperSTT = process.env.OPENAI_API_KEY
     ? new OpenAISTT(process.env.OPENAI_API_KEY)
     : null;
+
+  // Realtime session
+  let realtimeSession = null;
 
   // 停顿检测状态
   let silenceStart = null; // 静音开始时间
@@ -82,8 +79,10 @@ wss.on('connection', (ws) => {
     console.log(`Transcribing ${pcm.length} bytes (RMS: ${segmentRMS.toFixed(0)})...`);
 
     try {
-      const engine = currentEngine === 'whisper' && whisperSTT ? whisperSTT : stt;
-      const text = await engine.transcribe(pcm);
+      if (!whisperSTT) {
+        throw new Error('No STT engine configured');
+      }
+      const text = await whisperSTT.transcribe(pcm);
       console.log(`STT result: "${text}"`);
 
       if (text && text.trim() && !isHallucination(text.trim())) {
@@ -128,26 +127,33 @@ wss.on('connection', (ws) => {
     if (isBinary) {
       if (!recording) return;
       const pcm = Buffer.isBuffer(data) ? data : Buffer.from(data);
-      audioBuffer.push(pcm);
-      audioBytes += pcm.length;
 
-      // 计算当前 chunk 的 RMS
-      const rms = calcRMS(pcm);
-      const now = Date.now();
+      if (realtimeSession) {
+        // 实时模式：直接转发给讯飞
+        realtimeSession.send(pcm);
+      } else {
+        // 一次性模式（whisper）：原有累积逻辑
+        audioBuffer.push(pcm);
+        audioBytes += pcm.length;
 
-      if (rms < SILENCE_RMS_THRESHOLD) {
-        // 静音
-        if (!silenceStart) silenceStart = now;
-        const silenceDuration = now - silenceStart;
+        // 计算当前 chunk 的 RMS
+        const rms = calcRMS(pcm);
+        const now = Date.now();
 
-        if (silenceDuration >= SILENCE_DURATION_MS && audioBuffer.length > 0 && !transcribing) {
-          console.log(`Silence detected (${silenceDuration}ms), triggering transcription`);
-          transcribeBuffer();
+        if (rms < SILENCE_RMS_THRESHOLD) {
+          // 静音
+          if (!silenceStart) silenceStart = now;
+          const silenceDuration = now - silenceStart;
+
+          if (silenceDuration >= SILENCE_DURATION_MS && audioBuffer.length > 0 && !transcribing) {
+            console.log(`Silence detected (${silenceDuration}ms), triggering transcription`);
+            transcribeBuffer();
+            silenceStart = null;
+          }
+        } else {
+          // 有声音，重置静音计时
           silenceStart = null;
         }
-      } else {
-        // 有声音，重置静音计时
-        silenceStart = null;
       }
       return;
     }
@@ -168,6 +174,34 @@ wss.on('connection', (ws) => {
           return;
         }
 
+        // 讯飞走实时 WebSocket
+        if (currentEngine === 'iflytek') {
+          const appId = msg.iflytekAppId || process.env.IFLYTEK_APP_ID;
+          const apiKey = msg.iflytekApiKey || process.env.IFLYTEK_API_KEY;
+          const apiSecret = msg.iflytekApiSecret || process.env.IFLYTEK_API_SECRET || '';
+          console.log(`iFlytek credentials: appId=${appId ? appId.substring(0, 4) + '...' : 'EMPTY'}, apiKey=${apiKey ? apiKey.substring(0, 4) + '...' : 'EMPTY'}, apiSecret=${apiSecret ? apiSecret.substring(0, 4) + '...' : 'EMPTY'}`);
+          if (!appId || !apiKey) {
+            ws.send(JSON.stringify({ type: 'error', message: 'No iFlytek credentials configured. Add them in Settings.' }));
+            recording = false;
+            return;
+          }
+          const rt = new IflytekRealtimeSTT(appId, apiKey, apiSecret);
+          realtimeSession = rt.startSession();
+          realtimeSession.onResult((result) => {
+            if (result.type === 'partial') {
+              ws.send(JSON.stringify({ type: 'transcription_partial', text: result.text }));
+            } else if (result.type === 'final') {
+              if (result.text && result.text.trim()) {
+                ws.send(JSON.stringify({ type: 'transcription', text: result.text.trim() }));
+              }
+            }
+          });
+          realtimeSession.onError((err) => {
+            console.error('iFlytek realtime error:', err.message);
+            ws.send(JSON.stringify({ type: 'error', message: err.message }));
+          });
+        }
+
         ws.send(JSON.stringify({ type: 'status', status: 'recording' }));
         startDetection();
         console.log(`Recording started (engine: ${currentEngine})`);
@@ -181,8 +215,18 @@ wss.on('connection', (ws) => {
         stopDetection();
         console.log('Recording stopped, remaining chunks:', audioBuffer.length);
 
-        // 识别剩余音频
-        await transcribeBuffer();
+        if (realtimeSession) {
+          // 实时模式：告诉讯飞音频结束，等最终结果后关闭
+          realtimeSession.finish();
+          const session = realtimeSession;
+          setTimeout(() => {
+            session.close();
+            if (realtimeSession === session) realtimeSession = null;
+          }, 3000);
+        } else {
+          // 一次性模式：识别剩余音频
+          await transcribeBuffer();
+        }
 
         ws.send(JSON.stringify({ type: 'status', status: 'ready' }));
       }
@@ -193,6 +237,10 @@ wss.on('connection', (ws) => {
 
   ws.on('close', () => {
     stopDetection();
+    if (realtimeSession) {
+      realtimeSession.close();
+      realtimeSession = null;
+    }
     console.log('Client disconnected');
   });
 });

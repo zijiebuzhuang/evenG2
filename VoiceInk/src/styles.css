@@ -135,7 +135,7 @@ body { -ms-overflow-style: none; scrollbar-width: none; }
 .recording-card-top {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 20px;
 }
 
 .recording-title {
@@ -149,9 +149,13 @@ body { -ms-overflow-style: none; scrollbar-width: none; }
   letter-spacing: -0.17px;
   font-weight: 400;
   color: var(--text-first);
-  white-space: nowrap;
+}
+
+.recording-title #recordingTitleText {
   overflow: hidden;
+  white-space: nowrap;
   text-overflow: ellipsis;
+  min-width: 0;
 }
 
 .connection-dot {
@@ -295,6 +299,10 @@ body { -ms-overflow-style: none; scrollbar-width: none; }
   color: var(--text-first);
 }
 
+.transcript-text.partial {
+  color: var(--text-second);
+}
+
 /* Button container */
 .button-container {
   padding: 12px 0 calc(12px + env(safe-area-inset-bottom));
@@ -325,6 +333,19 @@ body { -ms-overflow-style: none; scrollbar-width: none; }
 
 .action-button:hover { opacity: 0.9; }
 .action-button:active { opacity: 0.6; }
+
+.action-button.btn-disabled {
+  position: relative;
+  pointer-events: none;
+}
+
+.action-button.btn-disabled::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.8);
+  border-radius: inherit;
+}
 
 .action-button img {
   width: 24px;
@@ -372,6 +393,10 @@ body { -ms-overflow-style: none; scrollbar-width: none; }
   right: auto;
 }
 
+.settings-page .configure-section {
+  overflow-y: scroll;
+}
+
 .section-title {
   font-size: 13px;
   line-height: 17px;
@@ -386,10 +411,14 @@ body { -ms-overflow-style: none; scrollbar-width: none; }
   background: var(--bg-first);
   padding: 16px;
   border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
+.about-card { gap: 4px; }
 .about-card p { font-size: 15px; line-height: 22px; }
-.about-card .hint { font-size: 13px; color: var(--text-second); margin-top: 4px; }
+.about-card .hint { font-size: 13px; color: var(--text-second); }
 
 .steps-hint {
   margin-top: 12px;
@@ -404,8 +433,169 @@ body { -ms-overflow-style: none; scrollbar-width: none; }
 }
 
 .link-text {
-  color: var(--text-first);
+  color: var(--text-second);
   text-decoration: underline;
+  cursor: pointer;
+}
+
+/* Settings sub-tabs (MoonWalker style) */
+.settings-tabs {
+  display: flex;
+  gap: 2px;
+  margin-bottom: 12px;
+  padding: 2px;
+  background: var(--bg-fourth);
+  border-radius: 6px;
+  height: 40px;
+}
+
+.settings-tab {
+  flex: 1;
+  padding: 0;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  font-family: var(--font-stack);
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--text-second);
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: center;
+}
+
+.settings-tab.active {
+  background: var(--bg-first);
+  color: var(--text-first);
+}
+
+.settings-panel { margin-top: 4px; }
+.settings-panel.hidden { display: none; }
+.settings-panel .input-wrapper { margin-bottom: 8px; }
+.settings-panel .input-wrapper:last-child { margin-bottom: 0; }
+.panel-hint { font-size: 13px; color: var(--text-second); }
+
+/* Toggle card */
+.toggle-card { padding: 12px 16px; }
+
+.toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.toggle-label {
+  font-size: 15px;
+  line-height: 19px;
+  letter-spacing: -0.15px;
+  font-weight: 400;
+  color: var(--text-first);
+}
+
+.toggle-icon {
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+/* Set as Default button */
+.set-default-btn {
+  width: 100%;
+  height: 40px;
+  margin-top: 12px;
+  border: none;
+  border-radius: 5px;
+  background: var(--bg-input);
+  font-family: var(--font-stack);
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--text-first);
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.set-default-btn:active {
+  background: var(--bg-input-focus);
+}
+
+.set-default-btn.disabled {
+  pointer-events: none;
+  color: rgba(35, 35, 35, 0.2);
+}
+
+.card-label {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--text-second);
+  padding: 0 4px;
+  margin: 0 0 6px 0;
+}
+
+.input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.input-wrapper .input-box {
+  flex: 1;
+  padding-right: 80px;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.input-toggle-vis {
+  position: absolute;
+  right: 44px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.input-toggle-vis img {
+  display: block;
+  width: 16px;
+  height: 16px;
+}
+
+.input-wrapper .input-box:not(:placeholder-shown) ~ .input-toggle-vis {
+  display: flex;
+}
+
+.input-clear {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.input-clear img {
+  display: block;
+  width: 16px;
+  height: 16px;
+}
+
+.input-wrapper .input-box:not(:placeholder-shown) ~ .input-clear {
+  display: flex;
 }
 
 .input-box {
@@ -577,4 +767,258 @@ body { -ms-overflow-style: none; scrollbar-width: none; }
   width: 24px;
   height: 24px;
   flex-shrink: 0;
+}
+
+/* Settings card (MoonWalker style) */
+.settings-card {
+  background: var(--bg-first);
+  padding: 16px;
+  border-radius: 6px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  box-sizing: border-box;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.settings-card:active {
+  opacity: 0.6;
+}
+
+.settings-card + .settings-card {
+  margin-top: 6px;
+}
+
+.settings-card-label {
+  flex: 1;
+  font-size: 15px;
+  line-height: 19px;
+  letter-spacing: -0.15px;
+  font-weight: 400;
+  color: var(--text-first);
+}
+
+/* Confirm Dialog (MoonWalker permission modal style) */
+.dialog-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.3s;
+}
+
+.dialog-overlay.hidden {
+  display: none;
+}
+
+.dialog {
+  width: 345px;
+  background: var(--bg-third);
+  border-radius: 6px;
+  padding: 16px;
+  box-shadow: 0px 4px 20px rgba(0, 0, 0, 0.15);
+  display: flex;
+  flex-direction: column;
+}
+
+.dialog-title {
+  font-size: 17px;
+  line-height: 22px;
+  letter-spacing: -0.17px;
+  font-weight: 400;
+  color: var(--text-first);
+  margin: 0 0 24px 0;
+  text-align: center;
+}
+
+.dialog-message {
+  font-size: 15px;
+  line-height: 19px;
+  letter-spacing: -0.15px;
+  font-weight: 300;
+  color: var(--text-first);
+  text-align: left;
+  margin: 0 0 24px 0;
+}
+
+.dialog-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.dialog-btn {
+  flex: 1;
+  height: 48px;
+  background: var(--bg-first);
+  border: none;
+  border-radius: 6px;
+  font-family: var(--font-stack);
+  font-size: 15px;
+  line-height: 19px;
+  letter-spacing: -0.15px;
+  font-weight: 400;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.dialog-btn:active {
+  opacity: 0.6;
+}
+
+.dialog-btn.cancel {
+  color: var(--text-first);
+}
+
+.dialog-btn.confirm {
+  color: var(--text-error);
+}
+
+/* Settings card value text */
+.settings-card-value {
+  font-size: 15px;
+  line-height: 19px;
+  letter-spacing: -0.15px;
+  font-weight: 400;
+  color: var(--text-second);
+  flex-shrink: 0;
+}
+
+/* Bottom Sheet Modal (MoonWalker style) */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 2000;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  transition: opacity 0.3s;
+}
+
+.modal-overlay.hidden {
+  display: none;
+}
+
+.modal-content {
+  background: var(--bg-third);
+  border-radius: 6px 6px 0 0;
+  width: 100%;
+  max-width: 600px;
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.15);
+  animation: slideUp 0.3s ease-out;
+}
+
+@keyframes slideUp {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+.modal-header {
+  height: 46px;
+  padding: 0 16px;
+  margin: 12px 12px 0 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.modal-title {
+  font-size: 20px;
+  line-height: 26px;
+  letter-spacing: -0.6px;
+  font-weight: 400;
+  color: var(--text-first);
+  margin: 0;
+}
+
+.modal-close {
+  position: absolute;
+  right: 16px;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.2s;
+}
+
+.modal-close:active {
+  opacity: 0.6;
+}
+
+.modal-options {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px;
+}
+
+.modal-option {
+  background: var(--bg-first);
+  border: none;
+  border-radius: 6px;
+  padding: 16px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-family: var(--font-stack);
+  font-size: 17px;
+  line-height: 22px;
+  letter-spacing: -0.17px;
+  font-weight: 400;
+  color: var(--text-first);
+  cursor: pointer;
+  transition: opacity 0.2s;
+  text-align: left;
+}
+
+.modal-option:active {
+  opacity: 0.6;
+}
+
+.modal-option.selected::after {
+  content: '';
+  width: 24px;
+  height: 24px;
+  background-image: url('/check-icon.svg');
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  flex-shrink: 0;
+}
+
+.modal-footer {
+  padding: 0 12px calc(12px + env(safe-area-inset-bottom)) 12px;
+}
+
+.modal-confirm-button {
+  width: 100%;
+  height: 56px;
+  background: var(--bg-first);
+  border: none;
+  border-radius: 6px;
+  font-family: var(--font-stack);
+  font-size: 17px;
+  line-height: 22px;
+  letter-spacing: -0.17px;
+  font-weight: 400;
+  color: var(--text-first);
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.modal-confirm-button:active {
+  opacity: 0.6;
 }

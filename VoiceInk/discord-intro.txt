@@ -3,7 +3,7 @@
 Just built a Chinese speech-to-text app for the G2! Think of it as a pocket transcriber that lives on your glasses.
 
 Here's what it does:
-- Real-time Chinese transcription powered by Baidu ASR
+- Real-time Chinese transcription powered by iFlytek ASR
 - Smart silence detection — it listens for natural pauses in your speech and auto-transcribes (no button mashing needed)
 - Three-state recording: start → pause → resume → stop, nice and smooth
 - Every transcript comes with timestamps so you know exactly when things were said
@@ -12,6 +12,6 @@ Here's what it does:
 
 The backend runs a lightweight Node.js server that does the heavy lifting. Audio comes in as raw PCM, the server monitors volume levels, and when you stop talking for ~1.5 seconds it fires off the recognition. There's also a 10-second safety net so long monologues don't get lost.
 
-Built with Vite + vanilla JS, no frameworks, keeps things fast and simple. OpenAI Whisper tab is there too — just waiting to be wired up for when you want that extra accuracy.
+Built with Vite + vanilla JS, no frameworks, keeps things fast and simple. Groq Whisper tab is there too for English transcription.
 
 Would love to hear your thoughts! 🫶

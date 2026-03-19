@@ -1,5 +1,97 @@
 import { waitForEvenAppBridge } from '@evenrealities/even_hub_sdk';
 
+// --- i18n ---
+const i18n = {
+  en: {
+    settings: 'Settings',
+    display: 'Display',
+    glassesDisplay: 'Glasses Display',
+    chineseAsr: 'Chinese ASR',
+    englishAsr: 'English ASR',
+    general: 'General',
+    language: 'Language',
+    clearAllRecordings: 'Clear All Recordings',
+    about: 'About',
+    aboutDesc: 'Chinese STT for Even G2',
+    notConnected: 'Not Connected',
+    ready: 'Ready',
+    glassesConnected: 'Glasses Connected',
+    newConversation: 'New Conversation',
+    startRecording: 'Start Recording',
+    stop: 'Stop',
+    pause: 'Pause',
+    continue: 'Continue',
+    noRecordings: 'No recordings',
+    whisperHint: 'Add your Groq API Key in Settings to get started',
+    goToSettings: 'Go to Settings',
+    clearTitle: 'Clear All Recordings?',
+    clearMessage: 'This will permanently delete all recording history. This action cannot be undone.',
+    cancel: 'Cancel',
+    clear: 'Clear',
+    confirm: 'Confirm',
+    languageTitle: 'Language',
+    iflytekSteps: [
+      'Go to <a class="link-text" href="https://console.xfyun.cn" target="_blank" rel="noopener">console.xfyun.cn</a>',
+      'Create an app and enable the "Real-time ASR" service',
+      'Copy APPID, API Key, and API Secret above',
+    ],
+    groqSteps: [
+      'Go to <a class="link-text" href="https://console.groq.com" target="_blank" rel="noopener">console.groq.com</a>',
+      'Sign in and navigate to API Keys',
+      'Create a new secret key and paste it above',
+    ],
+    chinese: 'Chinese',
+    english: 'English',
+  },
+  zh: {
+    settings: '设置',
+    display: '显示',
+    glassesDisplay: '眼镜显示',
+    chineseAsr: '中文语音识别',
+    englishAsr: '英文语音识别',
+    general: '通用',
+    language: '语言',
+    clearAllRecordings: '清空所有录音',
+    about: '关于',
+    aboutDesc: 'Even G2 中文语音转文字',
+    notConnected: '未连接',
+    ready: '就绪',
+    glassesConnected: '眼镜已连接',
+    newConversation: '新对话',
+    startRecording: '开始录音',
+    stop: '停止',
+    pause: '暂停',
+    continue: '继续',
+    noRecordings: '暂无录音',
+    whisperHint: '请在设置中添加 Groq API Key',
+    goToSettings: '前往设置',
+    clearTitle: '清空所有录音？',
+    clearMessage: '这将永久删除所有录音记录，此操作无法撤销。',
+    cancel: '取消',
+    clear: '清空',
+    confirm: '确认',
+    languageTitle: '语言',
+    iflytekSteps: [
+      '前往 <a class="link-text" href="https://console.xfyun.cn" target="_blank" rel="noopener">console.xfyun.cn</a>',
+      '创建应用并开通「实时语音转写」服务',
+      '将 APPID、API Key 和 API Secret 填入上方',
+    ],
+    groqSteps: [
+      '前往 <a class="link-text" href="https://console.groq.com" target="_blank" rel="noopener">console.groq.com</a>',
+      '登录并进入 API Keys 页面',
+      '创建密钥并粘贴到上方',
+    ],
+    chinese: '中文',
+    english: '英文',
+  },
+};
+
+function t(key) {
+  return i18n[currentLang]?.[key] || i18n.en[key] || key;
+}
+
+let currentLang = localStorage.getItem('voiceink_language') || 'en';
+
 // --- State ---
 let bridge = null;
 let ws = null;
@@ -10,7 +102,7 @@ let audioChunks = [];
 let transcripts = []; // { text, offsetMs }
 let recordings = JSON.parse(localStorage.getItem('voiceink_recordings') || '[]');
 let wsUrl = localStorage.getItem('voiceink_ws_url') || 'ws://localhost:8080';
-let activeEngine = 'baidu';
+let activeEngine = 'iflytek';
 let reconnectAttempts = 0;
 const MAX_RECONNECT = 10;
 
@@ -53,11 +145,175 @@ const buttonContainer = document.getElementById('buttonContainer');
 const whisperKeyInput = document.getElementById('whisperKeyInput');
 const tabBaidu = document.getElementById('tabBaidu');
 const tabWhisper = document.getElementById('tabWhisper');
+const iflytekAppId = document.getElementById('iflytekAppId');
+const iflytekApiKey = document.getElementById('iflytekApiKey');
+const iflytekApiSecret = document.getElementById('iflytekApiSecret');
+const glassesDisplayToggle = document.getElementById('glassesDisplayToggle');
+let glassesDisplayOn = localStorage.getItem('voiceink_glasses_display') !== 'off';
+
+// --- Input Clear Buttons ---
+const inputKeyMap = {
+  iflytekAppId: 'voiceink_iflytek_appid',
+  iflytekApiKey: 'voiceink_iflytek_apikey',
+  iflytekApiSecret: 'voiceink_iflytek_apisecret',
+  whisperKeyInput: 'voiceink_whisper_key',
+};
+
+document.querySelectorAll('.input-clear').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const inputId = btn.dataset.for;
+    const input = document.getElementById(inputId);
+    if (input) {
+      input.value = '';
+      const storageKey = inputKeyMap[inputId];
+      if (storageKey) localStorage.removeItem(storageKey);
+    }
+  });
+});
+
+// Password visibility toggle
+document.querySelectorAll('.input-toggle-vis').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const input = document.getElementById(btn.dataset.for);
+    if (!input) return;
+    const isPassword = input.type === 'password';
+    input.type = isPassword ? 'text' : 'password';
+    btn.querySelector('img').src = isPassword ? '/eye-show.svg' : '/eye-hide.svg';
+  });
+});
+
+glassesDisplayToggle.addEventListener('click', () => {
+  glassesDisplayOn = !glassesDisplayOn;
+  glassesDisplayToggle.src = glassesDisplayOn ? '/toggle-on.svg' : '/toggle-off.svg';
+});
+
+// --- Clear History Dialog ---
+const clearHistoryBtn = document.getElementById('clearHistoryBtn');
+const dialogOverlay = document.getElementById('dialogOverlay');
+const dialogCancel = document.getElementById('dialogCancel');
+const dialogConfirm = document.getElementById('dialogConfirm');
+
+clearHistoryBtn.addEventListener('click', () => {
+  dialogOverlay.classList.remove('hidden');
+});
+
+dialogCancel.addEventListener('click', () => {
+  dialogOverlay.classList.add('hidden');
+});
+
+dialogOverlay.addEventListener('click', (e) => {
+  if (e.target === dialogOverlay) dialogOverlay.classList.add('hidden');
+});
+
+dialogConfirm.addEventListener('click', () => {
+  recordings = [];
+  localStorage.setItem('voiceink_recordings', '[]');
+  dialogOverlay.classList.add('hidden');
+  renderHistory();
+});
+
+// --- Language Picker ---
+const languageCard = document.getElementById('languageCard');
+const languageValue = document.getElementById('languageValue');
+const languageModal = document.getElementById('languageModal');
+const languageModalClose = document.getElementById('languageModalClose');
+const languageConfirmBtn = document.getElementById('languageConfirmBtn');
+const languageOptions = languageModal.querySelectorAll('.modal-option');
+
+let tempLang = currentLang;
+
+function applyLanguage() {
+  // Settings page
+  document.querySelector('#settingsPage .header h1').textContent = t('settings');
+  document.querySelectorAll('.section-title').forEach(el => {
+    if (el.textContent === 'Display' || el.textContent === '显示') el.textContent = t('display');
+    if (el.textContent === 'Chinese ASR' || el.textContent === '中文语音识别') el.textContent = t('chineseAsr');
+    if (el.textContent === 'English ASR' || el.textContent === '英文语音识别') el.textContent = t('englishAsr');
+    if (el.textContent === 'General' || el.textContent === '通用') el.textContent = t('general');
+    if (el.textContent === 'About' || el.textContent === '关于') el.textContent = t('about');
+  });
+  document.querySelector('.toggle-label').textContent = t('glassesDisplay');
+  document.querySelector('#languageCard .settings-card-label').textContent = t('language');
+  document.querySelector('#clearHistoryBtn .settings-card-label').textContent = t('clearAllRecordings');
+  document.querySelector('.about-card .hint').textContent = t('aboutDesc');
+
+  // Tabs
+  tabBaidu.textContent = t('chinese');
+  tabWhisper.textContent = t('english');
+
+  // Steps hints
+  const stepsHints = document.querySelectorAll('.steps-hint');
+  if (stepsHints[0]) {
+    stepsHints[0].innerHTML = t('iflytekSteps').map((s, i) => `<p>${i + 1}. ${s}</p>`).join('');
+  }
+  if (stepsHints[1]) {
+    stepsHints[1].innerHTML = t('groqSteps').map((s, i) => `<p>${i + 1}. ${s}</p>`).join('');
+  }
+
+  // Dialog
+  document.querySelector('.dialog-title').textContent = t('clearTitle');
+  document.querySelector('.dialog-message').textContent = t('clearMessage');
+  dialogCancel.textContent = t('cancel');
+  dialogConfirm.textContent = t('clear');
+
+  // Language modal
+  document.querySelector('.modal-title').textContent = t('languageTitle');
+  languageConfirmBtn.textContent = t('confirm');
+
+  // Language value display
+  languageValue.textContent = currentLang === 'zh' ? '中文' : 'English';
+
+  // Update connection status text
+  updateConnectionStatus();
+  // Update buttons text
+  updateButtons();
+  // Update history (for empty state text)
+  if (recordingState === 'stopped') renderHistory();
+}
+
+// Update selected state in modal
+function updateModalSelection() {
+  languageOptions.forEach(opt => {
+    opt.classList.toggle('selected', opt.dataset.lang === tempLang);
+  });
+}
+
+languageCard.addEventListener('click', () => {
+  tempLang = currentLang;
+  updateModalSelection();
+  languageModal.classList.remove('hidden');
+});
+
+languageModalClose.addEventListener('click', () => {
+  languageModal.classList.add('hidden');
+});
+
+languageModal.addEventListener('click', (e) => {
+  if (e.target === languageModal) languageModal.classList.add('hidden');
+});
+
+languageOptions.forEach(opt => {
+  opt.addEventListener('click', () => {
+    tempLang = opt.dataset.lang;
+    updateModalSelection();
+  });
+});
+
+languageConfirmBtn.addEventListener('click', () => {
+  currentLang = tempLang;
+  localStorage.setItem('voiceink_language', currentLang);
+  applyLanguage();
+  languageModal.classList.add('hidden');
+});
 
 // --- Page Navigation ---
 settingsButton.addEventListener('click', () => {
   settingsPage.classList.remove('hidden');
   whisperKeyInput.value = localStorage.getItem('voiceink_whisper_key') || '';
+  iflytekAppId.value = localStorage.getItem('voiceink_iflytek_appid') || '';
+  iflytekApiKey.value = localStorage.getItem('voiceink_iflytek_apikey') || '';
+  iflytekApiSecret.value = localStorage.getItem('voiceink_iflytek_apisecret') || '';
+  glassesDisplayToggle.src = glassesDisplayOn ? '/toggle-on.svg' : '/toggle-off.svg';
 });
 
 backButton.addEventListener('click', () => {
@@ -69,6 +325,11 @@ backButton.addEventListener('click', () => {
     if (newKey) sendWhisperKey(newKey);
     if (activeEngine === 'whisper' && recordingState === 'stopped') renderHistory();
   }
+  localStorage.setItem('voiceink_iflytek_appid', iflytekAppId.value.trim());
+  localStorage.setItem('voiceink_iflytek_apikey', iflytekApiKey.value.trim());
+  localStorage.setItem('voiceink_iflytek_apisecret', iflytekApiSecret.value.trim());
+  localStorage.setItem('voiceink_glasses_display', glassesDisplayOn ? 'on' : 'off');
+  updateButtons();
 });
 
 // Detail page
@@ -105,7 +366,7 @@ function renderHistory() {
   const container = document.getElementById('historyContainer');
   historyList.innerHTML = '';
 
-  const filtered = recordings.filter(r => (r.engine || 'baidu') === activeEngine);
+  const filtered = recordings.filter(r => (r.engine || 'iflytek') === activeEngine);
 
   if (filtered.length === 0) {
     container.classList.add('empty');
@@ -114,9 +375,9 @@ function renderHistory() {
       historyList.innerHTML = `
         <div class="empty-state">
           <img src="/nohistory.svg" width="32" height="32">
-          <p>No recordings</p>
-          ${hasKey ? '' : '<p class="empty-hint">Add your Groq API Key in Settings to get started</p>'}
-          ${hasKey ? '' : '<button class="empty-settings-btn" id="emptySettingsBtn">Go to Settings</button>'}
+          <p>${t('noRecordings')}</p>
+          ${hasKey ? '' : `<p class="empty-hint">${t('whisperHint')}</p>`}
+          ${hasKey ? '' : `<button class="empty-settings-btn" id="emptySettingsBtn">${t('goToSettings')}</button>`}
         </div>`;
       const btn = document.getElementById('emptySettingsBtn');
       if (btn) btn.addEventListener('click', () => settingsButton.click());
@@ -124,7 +385,7 @@ function renderHistory() {
       historyList.innerHTML = `
         <div class="empty-state">
           <img src="/nohistory.svg" width="32" height="32">
-          <p>No recordings</p>
+          <p>${t('noRecordings')}</p>
         </div>`;
     }
     return;
@@ -232,6 +493,8 @@ function connectWebSocket() {
 
     if (msg.type === 'transcription') {
       addTranscript(msg.text);
+    } else if (msg.type === 'transcription_partial') {
+      updatePartialTranscript(msg.text);
     } else if (msg.type === 'error') {
       console.error('Server error:', msg.message);
     }
@@ -305,7 +568,7 @@ function updateRecordingTitle() {
     const match = firstText.match(/^[^。，,.\n]+/);
     recordingTitleText.textContent = match ? match[0].slice(0, 20) : firstText.slice(0, 20);
   } else {
-    recordingTitleText.textContent = 'New Conversation';
+    recordingTitleText.textContent = t('newConversation');
   }
 }
 
@@ -328,43 +591,54 @@ function updateConnectionStatus() {
   if (wsConnected) {
     recordingCard.classList.remove('disconnected');
     connectionDot.classList.add('connected');
-    recordingTitleText.textContent = 'Ready';
-    recordingStartTimeEl.textContent = glassesConnected ? 'Glasses Connected' : '';
+    recordingTitleText.textContent = t('ready');
+    recordingStartTimeEl.textContent = glassesConnected ? t('glassesConnected') : '';
   } else {
     recordingCard.classList.add('disconnected');
     connectionDot.classList.remove('connected');
-    recordingTitleText.textContent = 'Not Connected';
-    recordingStartTimeEl.textContent = glassesConnected ? 'Glasses Connected' : '';
+    recordingTitleText.textContent = t('notConnected');
+    recordingStartTimeEl.textContent = glassesConnected ? t('glassesConnected') : '';
   }
   durationText.textContent = '';
 }
 
+function hasCredentials() {
+  if (activeEngine === 'iflytek') {
+    return !!(localStorage.getItem('voiceink_iflytek_appid') && localStorage.getItem('voiceink_iflytek_apikey'));
+  }
+  if (activeEngine === 'whisper') {
+    return !!localStorage.getItem('voiceink_whisper_key');
+  }
+  return false;
+}
+
 function updateButtons() {
   if (recordingState === 'stopped') {
+    const disabled = !hasCredentials();
     buttonContainer.innerHTML = `
-      <button class="action-button primary" id="recordButton">
+      <button class="action-button primary${disabled ? ' btn-disabled' : ''}" id="recordButton">
         <img src="/start.svg" alt="Start" width="24" height="24">
-        <span>Start Recording</span>
+        <span>${t('startRecording')}</span>
       </button>`;
   } else if (recordingState === 'recording') {
     buttonContainer.innerHTML = `
       <button class="action-button stop" id="stopButton">
         <img src="/stop.svg" alt="Stop" width="24" height="24">
-        <span>Stop</span>
+        <span>${t('stop')}</span>
       </button>
       <button class="action-button secondary" id="pauseButton">
         <img src="/pause.svg" alt="Pause" width="24" height="24">
-        <span>Pause</span>
+        <span>${t('pause')}</span>
       </button>`;
   } else if (recordingState === 'paused') {
     buttonContainer.innerHTML = `
       <button class="action-button stop" id="stopButton">
         <img src="/stop.svg" alt="Stop" width="24" height="24">
-        <span>Stop</span>
+        <span>${t('stop')}</span>
       </button>
       <button class="action-button secondary" id="continueButton">
         <img src="/continue.svg" alt="Continue" width="24" height="24">
-        <span>Continue</span>
+        <span>${t('continue')}</span>
       </button>`;
   }
   // Re-bind events
@@ -408,7 +682,14 @@ async function startRecording() {
   pauseStartTime = null;
   recordingStartTime = Date.now();
 
-  wsSend({ type: 'audio_start', engine: activeEngine });
+  const engine = activeEngine === 'iflytek' ? 'iflytek' : activeEngine;
+  const startMsg = { type: 'audio_start', engine };
+  if (engine === 'iflytek') {
+    startMsg.iflytekAppId = localStorage.getItem('voiceink_iflytek_appid') || '';
+    startMsg.iflytekApiKey = localStorage.getItem('voiceink_iflytek_apikey') || '';
+    startMsg.iflytekApiSecret = localStorage.getItem('voiceink_iflytek_apisecret') || '';
+  }
+  wsSend(startMsg);
 
   if (bridge) {
     bridge.audioControl(true);
@@ -467,7 +748,14 @@ async function resumeRecording() {
     pauseStartTime = null;
   }
 
-  wsSend({ type: 'audio_start', engine: activeEngine });
+  const engine = activeEngine === 'iflytek' ? 'iflytek' : activeEngine;
+  const startMsg = { type: 'audio_start', engine };
+  if (engine === 'iflytek') {
+    startMsg.iflytekAppId = localStorage.getItem('voiceink_iflytek_appid') || '';
+    startMsg.iflytekApiKey = localStorage.getItem('voiceink_iflytek_apikey') || '';
+    startMsg.iflytekApiSecret = localStorage.getItem('voiceink_iflytek_apisecret') || '';
+  }
+  wsSend(startMsg);
 
   if (bridge) {
     bridge.audioControl(true);
@@ -568,12 +856,18 @@ function stopBrowserMic() {
 
 function handleAudioData(pcm) {
   if (recordingState !== 'recording') return;
-  audioChunks.push(new Uint8Array(pcm));
-
-  if (audioChunks.length >= CHUNK_INTERVAL) {
-    const combined = mergeChunks(audioChunks);
-    wsSendBinary(combined);
-    audioChunks = [];
+  // 实时模式（iflytek）：每个 chunk 立即发送，减少延迟
+  // 一次性模式（whisper）：累积后批量发送
+  const engine = activeEngine === 'iflytek' ? 'iflytek' : activeEngine;
+  if (engine === 'iflytek') {
+    wsSendBinary(new Uint8Array(pcm).buffer);
+  } else {
+    audioChunks.push(new Uint8Array(pcm));
+    if (audioChunks.length >= CHUNK_INTERVAL) {
+      const combined = mergeChunks(audioChunks);
+      wsSendBinary(combined);
+      audioChunks = [];
+    }
   }
 }
 
@@ -586,10 +880,44 @@ function mergeChunks(chunks) {
 }
 
 // --- Transcript ---
+let lastTranscriptTime = 0;
+const MERGE_THRESHOLD_MS = 2000;
+
 function addTranscript(text) {
   if (!text || !text.trim()) return;
+  const partial = document.getElementById('partialTranscript');
+  if (partial) partial.remove();
+  const now = Date.now();
   const offsetMs = elapsedSeconds * 1000;
-  transcripts.push({ text: text.trim(), offsetMs });
+
+  const trimmed = text.trim();
+
+  // 讯飞经常把上一句的标点粘在下一段开头，先剥离
+  const leadingPunctMatch = trimmed.match(/^([，。！？、；：""''（）《》【】…—·,.!?;:'"()\[\]\s]+)/);
+  let leadingPunct = '';
+  let body = trimmed;
+  if (leadingPunctMatch && transcripts.length > 0) {
+    leadingPunct = leadingPunctMatch[1];
+    body = trimmed.slice(leadingPunct.length);
+    transcripts[transcripts.length - 1].text += leadingPunct.trim();
+  }
+
+  if (!body) {
+    // 纯标点，已追加到上一条
+    lastTranscriptTime = now;
+    updateRecordingTitle();
+    renderTranscripts();
+    updateG2Display();
+    return;
+  }
+
+  // 讯飞实时模式分段过碎，短间隔内的 final 合并到同一条
+  if (activeEngine === 'iflytek' && transcripts.length > 0 && (now - lastTranscriptTime) < MERGE_THRESHOLD_MS) {
+    transcripts[transcripts.length - 1].text += body;
+  } else {
+    transcripts.push({ text: body, offsetMs });
+  }
+  lastTranscriptTime = now;
   updateRecordingTitle();
   renderTranscripts();
   updateG2Display();
@@ -597,9 +925,31 @@ function addTranscript(text) {
 
 function clearTranscripts() {
   transcripts = [];
+  const partial = document.getElementById('partialTranscript');
+  if (partial) partial.remove();
   updateRecordingTitle();
   renderTranscripts();
   updateG2Display();
+}
+
+function updatePartialTranscript(text) {
+  if (!text || !text.trim()) return;
+  let partial = document.getElementById('partialTranscript');
+  if (!partial) {
+    partial = document.createElement('div');
+    partial.id = 'partialTranscript';
+    partial.className = 'transcript-item';
+    const ts = document.createElement('span');
+    ts.className = 'transcript-timestamp';
+    ts.textContent = formatDuration(elapsedSeconds);
+    const txt = document.createElement('span');
+    txt.className = 'transcript-text partial';
+    partial.appendChild(ts);
+    partial.appendChild(txt);
+    transcriptList.appendChild(partial);
+  }
+  partial.querySelector('.transcript-text').textContent = text;
+  transcriptContainer.scrollTop = transcriptContainer.scrollHeight;
 }
 
 function renderTranscripts() {
@@ -661,6 +1011,7 @@ let g2Initialized = false;
 
 async function updateG2Display() {
   if (!bridge) return;
+  if (!glassesDisplayOn) return;
 
   try {
     if (!g2Initialized) {
@@ -725,8 +1076,8 @@ tabBaidu.addEventListener('click', () => {
   if (tabBaidu.classList.contains('disabled')) return;
   tabBaidu.classList.add('active');
   tabWhisper.classList.remove('active');
-  activeEngine = 'baidu';
-  if (recordingState === 'stopped') renderHistory();
+  activeEngine = 'iflytek';
+  if (recordingState === 'stopped') { renderHistory(); updateButtons(); }
 });
 
 tabWhisper.addEventListener('click', () => {
@@ -734,12 +1085,12 @@ tabWhisper.addEventListener('click', () => {
   tabWhisper.classList.add('active');
   tabBaidu.classList.remove('active');
   activeEngine = 'whisper';
-  if (recordingState === 'stopped') renderHistory();
+  if (recordingState === 'stopped') { renderHistory(); updateButtons(); }
 });
 
 // --- Init ---
 // WebSocket 和 G2 bridge 并行初始化，互不阻塞
-updateButtons();
+applyLanguage();
 updateDurationDot();
 updateSections();
 connectWebSocket();

@@ -23,8 +23,6 @@ class OpenAISTT {
         `-H "Authorization: Bearer ${this.apiKey}" ` +
         `-F "file=@${tmpPath}" ` +
         `-F "model=whisper-large-v3" ` +
-        `-F "language=zh" ` +
-        `-F "prompt=以下是普通话的句子，请使用标点符号。" ` +
         `-F "response_format=text"`,
         { encoding: 'utf-8', timeout: 35000 }
       );
