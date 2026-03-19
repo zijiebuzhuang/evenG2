@@ -22,7 +22,7 @@ const i18n = {
     pause: 'Pause',
     continue: 'Continue',
     noRecordings: 'No recordings',
-    whisperHint: 'Add your Groq API Key in Settings to get started',
+    whisperHint: 'Add your Deepgram API Key in Settings to get started',
     goToSettings: 'Go to Settings',
     clearTitle: 'Clear All Recordings?',
     clearMessage: 'This will permanently delete all recording history. This action cannot be undone.',
@@ -35,10 +35,10 @@ const i18n = {
       'Create an app and enable the "Real-time ASR" service',
       'Copy APPID, API Key, and API Secret above',
     ],
-    groqSteps: [
-      'Go to <a class="link-text" href="https://console.groq.com" target="_blank" rel="noopener">console.groq.com</a>',
-      'Sign in and navigate to API Keys',
-      'Create a new secret key and paste it above',
+    deepgramSteps: [
+      'Go to <a class="link-text" href="https://console.deepgram.com" target="_blank" rel="noopener">console.deepgram.com</a>',
+      'Sign in and create a new API Key',
+      'Copy the key and paste it above',
     ],
     chinese: 'Chinese',
     english: 'English',
@@ -63,7 +63,7 @@ const i18n = {
     pause: '暂停',
     continue: '继续',
     noRecordings: '暂无录音',
-    whisperHint: '请在设置中添加 Groq API Key',
+    whisperHint: '请在设置中添加 Deepgram API Key',
     goToSettings: '前往设置',
     clearTitle: '清空所有录音？',
     clearMessage: '这将永久删除所有录音记录，此操作无法撤销。',
@@ -76,10 +76,10 @@ const i18n = {
       '创建应用并开通「实时语音转写」服务',
       '将 APPID、API Key 和 API Secret 填入上方',
     ],
-    groqSteps: [
-      '前往 <a class="link-text" href="https://console.groq.com" target="_blank" rel="noopener">console.groq.com</a>',
-      '登录并进入 API Keys 页面',
-      '创建密钥并粘贴到上方',
+    deepgramSteps: [
+      '前往 <a class="link-text" href="https://console.deepgram.com" target="_blank" rel="noopener">console.deepgram.com</a>',
+      '登录并创建新的 API Key',
+      '复制密钥并粘贴到上方',
     ],
     chinese: '中文',
     english: '英文',
@@ -97,16 +97,12 @@ let bridge = null;
 let ws = null;
 let wsConnected = false;
 let recordingState = 'stopped'; // 'recording' | 'paused' | 'stopped'
-let audioChunks = [];
-
 let transcripts = []; // { text, offsetMs }
 let recordings = JSON.parse(localStorage.getItem('voiceink_recordings') || '[]');
 let wsUrl = localStorage.getItem('voiceink_ws_url') || 'ws://localhost:8080';
 let activeEngine = 'iflytek';
 let reconnectAttempts = 0;
 const MAX_RECONNECT = 10;
-
-const CHUNK_INTERVAL = 20;
 
 // Recording timer state
 let recordingStartTime = null;
@@ -156,7 +152,7 @@ const inputKeyMap = {
   iflytekAppId: 'voiceink_iflytek_appid',
   iflytekApiKey: 'voiceink_iflytek_apikey',
   iflytekApiSecret: 'voiceink_iflytek_apisecret',
-  whisperKeyInput: 'voiceink_whisper_key',
+  whisperKeyInput: 'voiceink_deepgram_key',
 };
 
 document.querySelectorAll('.input-clear').forEach(btn => {
@@ -247,7 +243,7 @@ function applyLanguage() {
     stepsHints[0].innerHTML = t('iflytekSteps').map((s, i) => `<p>${i + 1}. ${s}</p>`).join('');
   }
   if (stepsHints[1]) {
-    stepsHints[1].innerHTML = t('groqSteps').map((s, i) => `<p>${i + 1}. ${s}</p>`).join('');
+    stepsHints[1].innerHTML = t('deepgramSteps').map((s, i) => `<p>${i + 1}. ${s}</p>`).join('');
   }
 
   // Dialog
@@ -309,7 +305,7 @@ languageConfirmBtn.addEventListener('click', () => {
 // --- Page Navigation ---
 settingsButton.addEventListener('click', () => {
   settingsPage.classList.remove('hidden');
-  whisperKeyInput.value = localStorage.getItem('voiceink_whisper_key') || '';
+  whisperKeyInput.value = localStorage.getItem('voiceink_deepgram_key') || '';
   iflytekAppId.value = localStorage.getItem('voiceink_iflytek_appid') || '';
   iflytekApiKey.value = localStorage.getItem('voiceink_iflytek_apikey') || '';
   iflytekApiSecret.value = localStorage.getItem('voiceink_iflytek_apisecret') || '';
@@ -319,10 +315,9 @@ settingsButton.addEventListener('click', () => {
 backButton.addEventListener('click', () => {
   settingsPage.classList.add('hidden');
   const newKey = whisperKeyInput.value.trim();
-  const oldKey = localStorage.getItem('voiceink_whisper_key') || '';
+  const oldKey = localStorage.getItem('voiceink_deepgram_key') || '';
   if (newKey !== oldKey) {
-    localStorage.setItem('voiceink_whisper_key', newKey);
-    if (newKey) sendWhisperKey(newKey);
+    localStorage.setItem('voiceink_deepgram_key', newKey);
     if (activeEngine === 'whisper' && recordingState === 'stopped') renderHistory();
   }
   localStorage.setItem('voiceink_iflytek_appid', iflytekAppId.value.trim());
@@ -371,7 +366,7 @@ function renderHistory() {
   if (filtered.length === 0) {
     container.classList.add('empty');
     if (activeEngine === 'whisper') {
-      const hasKey = !!localStorage.getItem('voiceink_whisper_key');
+      const hasKey = !!localStorage.getItem('voiceink_deepgram_key');
       historyList.innerHTML = `
         <div class="empty-state">
           <img src="/nohistory.svg" width="32" height="32">
@@ -483,8 +478,6 @@ function connectWebSocket() {
     reconnectAttempts = 0;
     wsConnected = true;
     updateConnectionStatus();
-    const savedKey = localStorage.getItem('voiceink_whisper_key');
-    if (savedKey) sendWhisperKey(savedKey);
   };
 
   ws.onmessage = (event) => {
@@ -522,10 +515,6 @@ function wsSend(obj) {
 
 function wsSendBinary(data) {
   if (ws?.readyState === WebSocket.OPEN) ws.send(data);
-}
-
-function sendWhisperKey(key) {
-  wsSend({ type: 'set_whisper_key', key });
 }
 
 // --- Utility Functions ---
@@ -607,7 +596,7 @@ function hasCredentials() {
     return !!(localStorage.getItem('voiceink_iflytek_appid') && localStorage.getItem('voiceink_iflytek_apikey'));
   }
   if (activeEngine === 'whisper') {
-    return !!localStorage.getItem('voiceink_whisper_key');
+    return !!localStorage.getItem('voiceink_deepgram_key');
   }
   return false;
 }
@@ -675,7 +664,6 @@ function saveRecording() {
 async function startRecording() {
   if (recordingState !== 'stopped') return;
   recordingState = 'recording';
-  audioChunks = [];
   transcripts = [];
   elapsedSeconds = 0;
   totalPausedMs = 0;
@@ -688,6 +676,8 @@ async function startRecording() {
     startMsg.iflytekAppId = localStorage.getItem('voiceink_iflytek_appid') || '';
     startMsg.iflytekApiKey = localStorage.getItem('voiceink_iflytek_apikey') || '';
     startMsg.iflytekApiSecret = localStorage.getItem('voiceink_iflytek_apisecret') || '';
+  } else if (engine === 'whisper') {
+    startMsg.deepgramApiKey = localStorage.getItem('voiceink_deepgram_key') || '';
   }
   wsSend(startMsg);
 
@@ -725,13 +715,6 @@ function pauseRecording() {
     stopBrowserMic();
   }
 
-  // Flush remaining chunks
-  if (audioChunks.length > 0) {
-    const combined = mergeChunks(audioChunks);
-    wsSendBinary(combined);
-    audioChunks = [];
-  }
-
   wsSend({ type: 'audio_stop' });
 
   updateDurationDot();
@@ -754,6 +737,8 @@ async function resumeRecording() {
     startMsg.iflytekAppId = localStorage.getItem('voiceink_iflytek_appid') || '';
     startMsg.iflytekApiKey = localStorage.getItem('voiceink_iflytek_apikey') || '';
     startMsg.iflytekApiSecret = localStorage.getItem('voiceink_iflytek_apisecret') || '';
+  } else if (engine === 'whisper') {
+    startMsg.deepgramApiKey = localStorage.getItem('voiceink_deepgram_key') || '';
   }
   wsSend(startMsg);
 
@@ -783,13 +768,6 @@ function stopRecording() {
       bridge.audioControl(false);
     } else {
       stopBrowserMic();
-    }
-
-    // Flush remaining chunks
-    if (audioChunks.length > 0) {
-      const combined = mergeChunks(audioChunks);
-      wsSendBinary(combined);
-      audioChunks = [];
     }
 
     wsSend({ type: 'audio_stop' });
@@ -856,27 +834,7 @@ function stopBrowserMic() {
 
 function handleAudioData(pcm) {
   if (recordingState !== 'recording') return;
-  // 实时模式（iflytek）：每个 chunk 立即发送，减少延迟
-  // 一次性模式（whisper）：累积后批量发送
-  const engine = activeEngine === 'iflytek' ? 'iflytek' : activeEngine;
-  if (engine === 'iflytek') {
-    wsSendBinary(new Uint8Array(pcm).buffer);
-  } else {
-    audioChunks.push(new Uint8Array(pcm));
-    if (audioChunks.length >= CHUNK_INTERVAL) {
-      const combined = mergeChunks(audioChunks);
-      wsSendBinary(combined);
-      audioChunks = [];
-    }
-  }
-}
-
-function mergeChunks(chunks) {
-  const total = chunks.reduce((s, c) => s + c.length, 0);
-  const merged = new Uint8Array(total);
-  let offset = 0;
-  for (const c of chunks) { merged.set(c, offset); offset += c.length; }
-  return merged.buffer;
+  wsSendBinary(new Uint8Array(pcm).buffer);
 }
 
 // --- Transcript ---
