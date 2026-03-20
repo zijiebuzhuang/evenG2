@@ -335,16 +335,8 @@ body { -ms-overflow-style: none; scrollbar-width: none; }
 .action-button:active { opacity: 0.6; }
 
 .action-button.btn-disabled {
-  position: relative;
+  background: rgba(0, 0, 0, 0.12);
   pointer-events: none;
-}
-
-.action-button.btn-disabled::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: rgba(255, 255, 255, 0.8);
-  border-radius: inherit;
 }
 
 .action-button img {
@@ -495,6 +487,15 @@ body { -ms-overflow-style: none; scrollbar-width: none; }
 .toggle-icon {
   cursor: pointer;
   flex-shrink: 0;
+  transition: opacity 0.2s;
+}
+
+.toggle-icon:hover {
+  opacity: 0.8;
+}
+
+.toggle-icon:active {
+  opacity: 0.6;
 }
 
 /* Set as Default button */
@@ -602,7 +603,7 @@ body { -ms-overflow-style: none; scrollbar-width: none; }
   width: 100%;
   padding: 12px;
   border: none;
-  border-radius: 5px;
+  border-radius: var(--border-radius);
   font-size: 15px;
   line-height: 19px;
   letter-spacing: -0.15px;
