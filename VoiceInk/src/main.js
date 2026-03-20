@@ -605,7 +605,7 @@ function updateButtons() {
   if (recordingState === 'stopped') {
     const disabled = !hasCredentials();
     buttonContainer.innerHTML = `
-      <button class="action-button primary${disabled ? ' btn-disabled' : ''}" id="recordButton">
+      <button class="action-button primary" id="recordButton"${disabled ? ' disabled' : ''}>
         <img src="/start.svg" alt="Start" width="24" height="24">
         <span>${t('startRecording')}</span>
       </button>`;
