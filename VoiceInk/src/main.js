@@ -102,6 +102,7 @@ let recordings = JSON.parse(localStorage.getItem('voiceink_recordings') || '[]')
 let wsUrl = localStorage.getItem('voiceink_ws_url') || 'ws://localhost:8080';
 let activeEngine = 'iflytek';
 let reconnectAttempts = 0;
+let selectedHistoryDateKey = '';
 const MAX_RECONNECT = 10;
 
 // Recording timer state
@@ -117,6 +118,15 @@ let browserMicStream = null;
 let browserWorkletNode = null;
 let useBrowserMic = false;
 
+const visualizerState = {
+  rafId: null,
+  current: 0,
+  target: 0,
+  intensity: 0,
+  phase: 0,
+  active: false,
+};
+
 // --- DOM ---
 const settingsPage = document.getElementById('settingsPage');
 const settingsButton = document.getElementById('settingsButton');
@@ -128,6 +138,9 @@ const connectionDot = document.getElementById('connectionDot');
 const durationDot = document.getElementById('durationDot');
 const durationText = document.getElementById('durationText');
 const recordingStartTimeEl = document.getElementById('recordingStartTime');
+const recordingVisualizer = document.getElementById('recordingVisualizer');
+const visualizerBars = Array.from(document.querySelectorAll('.recording-visualizer-bar'));
+const historyDateTabs = document.getElementById('historyDateTabs');
 const transcriptContainer = document.getElementById('transcriptContainer');
 const transcriptList = document.getElementById('transcriptList');
 const transcriptSection = document.getElementById('transcriptSection');
@@ -351,6 +364,40 @@ function openRecordingDetail(record) {
   detailPage.classList.remove('hidden');
 }
 
+function getRecordingDateKey(record) {
+  const date = new Date(record.startTime);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function formatHistoryDateLabel(dateKey) {
+  const date = new Date(`${dateKey}T00:00:00`);
+  return `${date.getMonth() + 1}.${date.getDate()}`;
+}
+
+function renderHistoryDateTabs(dateKeys) {
+  historyDateTabs.innerHTML = '';
+  if (dateKeys.length <= 1) {
+    historyDateTabs.style.display = dateKeys.length === 0 ? 'none' : '';
+  } else {
+    historyDateTabs.style.display = '';
+  }
+
+  dateKeys.forEach((dateKey) => {
+    const button = document.createElement('button');
+    button.className = 'history-date-tab';
+    if (dateKey === selectedHistoryDateKey) button.classList.add('active');
+    button.textContent = formatHistoryDateLabel(dateKey);
+    button.addEventListener('click', () => {
+      selectedHistoryDateKey = dateKey;
+      renderHistory();
+    });
+    historyDateTabs.appendChild(button);
+  });
+}
+
 function deleteRecording(id) {
   recordings = recordings.filter(r => r.id !== id);
   localStorage.setItem('voiceink_recordings', JSON.stringify(recordings));
@@ -364,6 +411,8 @@ function renderHistory() {
   const filtered = recordings.filter(r => (r.engine || 'iflytek') === activeEngine);
 
   if (filtered.length === 0) {
+    historyDateTabs.innerHTML = '';
+    historyDateTabs.style.display = 'none';
     container.classList.add('empty');
     if (activeEngine === 'whisper') {
       const hasKey = !!localStorage.getItem('voiceink_deepgram_key');
@@ -386,9 +435,17 @@ function renderHistory() {
     return;
   }
 
+  const dateKeys = [...new Set(filtered.map(getRecordingDateKey))].slice(0, 5);
+  if (!dateKeys.includes(selectedHistoryDateKey)) {
+    selectedHistoryDateKey = dateKeys[0];
+  }
+  renderHistoryDateTabs(dateKeys);
+
+  const visibleRecords = filtered.filter((record) => getRecordingDateKey(record) === selectedHistoryDateKey);
+
   container.classList.remove('empty');
 
-  filtered.forEach((record) => {
+  visibleRecords.forEach((record) => {
     const wrapper = document.createElement('div');
     wrapper.className = 'history-item-wrapper';
 
@@ -573,22 +630,145 @@ function stopDurationTimer() {
   if (durationTimer) { clearInterval(durationTimer); durationTimer = null; }
 }
 
+function setVisualizerMode(mode) {
+  recordingVisualizer.classList.remove('idle', 'paused');
+  if (mode) recordingVisualizer.classList.add(mode);
+}
+
+function resetVisualizerBars() {
+  visualizerBars.forEach((bar) => {
+    bar.style.transform = 'scaleY(0.25)';
+  });
+}
+
+function setVisualizerSquares() {
+  visualizerBars.forEach((bar) => {
+    bar.style.transform = 'scaleY(1)';
+  });
+}
+
+function animateVisualizer() {
+  if (!visualizerState.active) {
+    visualizerState.rafId = null;
+    return;
+  }
+
+  const target = recordingState === 'recording' ? visualizerState.target : 0;
+  const smoothing = target > visualizerState.current ? 0.18 : 0.08;
+  visualizerState.current += (target - visualizerState.current) * smoothing;
+  visualizerState.intensity *= recordingState === 'recording' ? 0.94 : 0.86;
+  visualizerState.phase += 0.07 + visualizerState.intensity * 0.08;
+
+  const isActiveVoice = visualizerState.current > 0.05 || visualizerState.intensity > 0.05;
+
+  if (!isActiveVoice) {
+    setVisualizerMode('idle');
+    setVisualizerSquares();
+  } else {
+    setVisualizerMode('');
+    visualizerBars.forEach((bar, index) => {
+      const offset = [0.72, 1, 0.82, 0.94, 0.68][index] || 0.8;
+      const wave = Math.sin(visualizerState.phase + index * 0.7) * (0.035 + visualizerState.intensity * 0.06);
+      const level = Math.max(0.25, Math.min(0.9, 0.25 + visualizerState.current * offset + wave));
+      bar.style.transform = `scaleY(${level})`;
+    });
+  }
+
+  if (recordingState !== 'recording' && visualizerState.current < 0.02) {
+    visualizerState.current = 0;
+    visualizerState.target = 0;
+    visualizerState.intensity = 0;
+    visualizerState.active = false;
+    resetVisualizerBars();
+    recordingVisualizer.classList.remove('active');
+    setVisualizerMode('');
+    visualizerState.rafId = null;
+    return;
+  }
+
+  visualizerState.rafId = requestAnimationFrame(animateVisualizer);
+}
+
+function ensureVisualizerAnimation() {
+  if (visualizerState.rafId !== null) return;
+  visualizerState.active = true;
+  visualizerState.rafId = requestAnimationFrame(animateVisualizer);
+}
+
+function updateRecordingCardUI() {
+  const isRecording = recordingState === 'recording';
+  const isPaused = recordingState === 'paused';
+  const showDisconnected = recordingState === 'stopped' && !wsConnected;
+
+  recordingCard.classList.toggle('recording', isRecording);
+  recordingCard.classList.toggle('disconnected', showDisconnected);
+
+  if (isRecording) {
+    recordingVisualizer.classList.add('active');
+    ensureVisualizerAnimation();
+    return;
+  }
+
+  visualizerState.target = 0;
+  visualizerState.intensity = 0;
+
+  if (isPaused) {
+    visualizerState.current = 0;
+    visualizerState.active = false;
+    if (visualizerState.rafId !== null) {
+      cancelAnimationFrame(visualizerState.rafId);
+      visualizerState.rafId = null;
+    }
+    setVisualizerSquares();
+    setVisualizerMode('paused');
+    recordingVisualizer.classList.add('active');
+    return;
+  }
+
+  if (recordingState === 'stopped') {
+    visualizerState.current = 0;
+    visualizerState.active = false;
+    if (visualizerState.rafId !== null) {
+      cancelAnimationFrame(visualizerState.rafId);
+      visualizerState.rafId = null;
+    }
+    resetVisualizerBars();
+    setVisualizerMode('');
+    recordingVisualizer.classList.remove('active');
+    return;
+  }
+
+  if (visualizerState.current > 0.02) {
+    recordingVisualizer.classList.add('active');
+    ensureVisualizerAnimation();
+  } else {
+    visualizerState.current = 0;
+    visualizerState.active = false;
+    if (visualizerState.rafId !== null) {
+      cancelAnimationFrame(visualizerState.rafId);
+      visualizerState.rafId = null;
+    }
+    setVisualizerSquares();
+    setVisualizerMode('idle');
+    recordingVisualizer.classList.add('active');
+  }
+}
+
 function updateConnectionStatus() {
   if (recordingState !== 'stopped') return; // don't override during recording
   const glassesConnected = !!bridge;
   connectionDot.style.display = '';
   if (wsConnected) {
-    recordingCard.classList.remove('disconnected');
     connectionDot.classList.add('connected');
     recordingTitleText.textContent = t('ready');
     recordingStartTimeEl.textContent = glassesConnected ? t('glassesConnected') : '';
   } else {
-    recordingCard.classList.add('disconnected');
     connectionDot.classList.remove('connected');
     recordingTitleText.textContent = t('notConnected');
     recordingStartTimeEl.textContent = glassesConnected ? t('glassesConnected') : '';
   }
   durationText.textContent = '';
+  updateRecordingCardUI();
 }
 
 function hasCredentials() {
@@ -688,7 +868,8 @@ async function startRecording() {
   }
 
   // Update UI
-  recordingCard.classList.remove('disconnected');
+  visualizerState.target = 0;
+  visualizerState.intensity = 0;
   updateDurationDot();
   durationText.textContent = '00:00:00';
   recordingStartTimeEl.textContent = formatStartTime(new Date(recordingStartTime));
@@ -696,6 +877,7 @@ async function startRecording() {
   renderTranscripts();
   updateButtons();
   updateSections();
+  updateRecordingCardUI();
   startDurationTimer();
   updateTabs();
 
@@ -719,6 +901,7 @@ function pauseRecording() {
 
   updateDurationDot();
   updateButtons();
+  updateRecordingCardUI();
   updateG2Display();
 }
 
@@ -750,6 +933,7 @@ async function resumeRecording() {
 
   updateDurationDot();
   updateButtons();
+  updateRecordingCardUI();
   startDurationTimer();
 
   updateG2Display();
@@ -781,6 +965,7 @@ function stopRecording() {
   updateDurationDot();
   updateButtons();
   updateSections();
+  updateRecordingCardUI();
   updateConnectionStatus();
   updateTabs();
   updateG2Display();
@@ -832,14 +1017,59 @@ function stopBrowserMic() {
   useBrowserMic = false;
 }
 
+function getPcmBytes(pcm) {
+  if (pcm instanceof Uint8Array) return pcm;
+  if (ArrayBuffer.isView(pcm)) {
+    return new Uint8Array(pcm.buffer, pcm.byteOffset, pcm.byteLength);
+  }
+  return new Uint8Array(pcm);
+}
+
+function updateVisualizerMeter(pcm) {
+  const bytes = getPcmBytes(pcm);
+  const samples = new Int16Array(bytes.buffer, bytes.byteOffset, Math.floor(bytes.byteLength / 2));
+  if (!samples.length) return;
+
+  let sumSquares = 0;
+  let zeroCrossings = 0;
+  let prev = samples[0] / 32768;
+
+  for (let i = 0; i < samples.length; i++) {
+    const sample = samples[i] / 32768;
+    sumSquares += sample * sample;
+    if ((sample >= 0 && prev < 0) || (sample < 0 && prev >= 0)) zeroCrossings++;
+    prev = sample;
+  }
+
+  const rms = Math.sqrt(sumSquares / samples.length);
+  const zcr = zeroCrossings / samples.length;
+  const energy = Math.min(1, Math.max(0, (rms - 0.015) * 6.5));
+  const brightness = energy > 0 ? Math.min(1, Math.max(0, (zcr - 0.04) * 8)) : 0;
+  const nextTarget = Math.min(1, energy * 0.9 + brightness * 0.1);
+
+  if (nextTarget < 0.03) {
+    visualizerState.target *= 0.82;
+    visualizerState.intensity *= 0.84;
+    return;
+  }
+
+  visualizerState.target = Math.max(nextTarget, visualizerState.target * 0.88);
+  visualizerState.intensity = Math.max(brightness, visualizerState.intensity * 0.9);
+}
+
 function handleAudioData(pcm) {
   if (recordingState !== 'recording') return;
-  wsSendBinary(new Uint8Array(pcm).buffer);
+  const bytes = getPcmBytes(pcm);
+  updateVisualizerMeter(bytes);
+  wsSendBinary(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength));
 }
 
 // --- Transcript ---
 let lastTranscriptTime = 0;
-const MERGE_THRESHOLD_MS = 2000;
+const MERGE_THRESHOLD_MS = 3500;
+const SHORT_FRAGMENT_LENGTH = 12;
+const MAX_TRANSCRIPT_SEGMENT_LENGTH = 72;
+const SENTENCE_END_RE = /[。！？!?]$/;
 
 function addTranscript(text) {
   if (!text || !text.trim()) return;
@@ -869,9 +1099,19 @@ function addTranscript(text) {
     return;
   }
 
-  // 讯飞实时模式分段过碎，短间隔内的 final 合并到同一条
-  if (activeEngine === 'iflytek' && transcripts.length > 0 && (now - lastTranscriptTime) < MERGE_THRESHOLD_MS) {
-    transcripts[transcripts.length - 1].text += body;
+  // 讯飞实时模式分段过碎，优先把短句和近邻片段并回上一条
+  if (activeEngine === 'iflytek' && transcripts.length > 0) {
+    const previous = transcripts[transcripts.length - 1];
+    const withinMergeWindow = (now - lastTranscriptTime) < MERGE_THRESHOLD_MS;
+    const previousEndsSentence = SENTENCE_END_RE.test(previous.text);
+    const shouldMergeShortFragment = body.length <= SHORT_FRAGMENT_LENGTH;
+    const hasRoom = (previous.text.length + body.length) <= MAX_TRANSCRIPT_SEGMENT_LENGTH;
+
+    if ((withinMergeWindow || shouldMergeShortFragment) && (!previousEndsSentence || shouldMergeShortFragment) && hasRoom) {
+      previous.text += body;
+    } else {
+      transcripts.push({ text: body, offsetMs });
+    }
   } else {
     transcripts.push({ text: body, offsetMs });
   }
@@ -1050,6 +1290,7 @@ tabWhisper.addEventListener('click', () => {
 // WebSocket 和 G2 bridge 并行初始化，互不阻塞
 applyLanguage();
 updateDurationDot();
+updateRecordingCardUI();
 updateSections();
 connectWebSocket();
 
