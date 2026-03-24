@@ -162,7 +162,6 @@ const visualizerState = {
 
 // --- DOM ---
 const settingsPage = document.getElementById('settingsPage');
-const backButton = document.getElementById('backButton');
 const recordingCard = document.getElementById('recordingCard');
 const recordingTitle = document.getElementById('recordingTitle');
 const recordingTitleText = document.getElementById('recordingTitleText');
@@ -265,7 +264,6 @@ let tempLang = currentLang;
 
 function applyLanguage() {
   // Settings page
-  document.querySelector('#settingsPage .header h1').textContent = t('settings');
   document.querySelectorAll('.section-title').forEach(el => {
     if (el.textContent === 'Display' || el.textContent === '显示') el.textContent = t('display');
     if (el.textContent === 'Chinese ASR' || el.textContent === '中文语音识别') el.textContent = t('chineseAsr');
@@ -348,16 +346,7 @@ languageConfirmBtn.addEventListener('click', () => {
 });
 
 // --- Page Navigation ---
-function openSettings() {
-  settingsPage.classList.remove('hidden');
-  whisperKeyInput.value = localStorage.getItem('voiceink_deepgram_key') || '';
-  iflytekAppId.value = localStorage.getItem('voiceink_iflytek_appid') || '';
-  iflytekApiKey.value = localStorage.getItem('voiceink_iflytek_apikey') || '';
-  iflytekApiSecret.value = localStorage.getItem('voiceink_iflytek_apisecret') || '';
-  glassesDisplayToggle.src = glassesDisplayOn ? `${BASE}toggle-on.svg` : `${BASE}toggle-off.svg`;
-}
-
-backButton.addEventListener('click', () => {
+function closeSettings() {
   settingsPage.classList.add('hidden');
   const newKey = whisperKeyInput.value.trim();
   const oldKey = localStorage.getItem('voiceink_deepgram_key') || '';
@@ -370,6 +359,19 @@ backButton.addEventListener('click', () => {
   localStorage.setItem('voiceink_iflytek_apisecret', iflytekApiSecret.value.trim());
   localStorage.setItem('voiceink_glasses_display', glassesDisplayOn ? 'on' : 'off');
   updateButtons();
+}
+
+function openSettings() {
+  settingsPage.classList.remove('hidden');
+  whisperKeyInput.value = localStorage.getItem('voiceink_deepgram_key') || '';
+  iflytekAppId.value = localStorage.getItem('voiceink_iflytek_appid') || '';
+  iflytekApiKey.value = localStorage.getItem('voiceink_iflytek_apikey') || '';
+  iflytekApiSecret.value = localStorage.getItem('voiceink_iflytek_apisecret') || '';
+  glassesDisplayToggle.src = glassesDisplayOn ? `${BASE}toggle-on.svg` : `${BASE}toggle-off.svg`;
+}
+
+settingsPage.addEventListener('click', (e) => {
+  if (e.target === settingsPage) closeSettings();
 });
 
 // Detail page

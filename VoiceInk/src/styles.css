@@ -427,33 +427,39 @@ body { -ms-overflow-style: none; scrollbar-width: none; }
   color: var(--text-first);
 }
 
-/* Settings page (fixed overlay like MoonWalker) */
+/* Settings half-modal */
 .settings-page {
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: var(--bg-third);
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
   z-index: 1000;
-  padding: 0 12px;
-  padding-top: env(safe-area-inset-top);
-  padding-bottom: env(safe-area-inset-bottom);
-  overflow-y: auto;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  transition: opacity 0.3s;
 }
 
 .settings-page.hidden {
   display: none;
 }
 
-.settings-page .header .icon-button {
-  position: absolute;
-  left: 0;
-  right: auto;
+.settings-sheet {
+  background: var(--bg-third);
+  width: 100%;
+  max-width: 600px;
+  height: min(78vh, 620px);
+  border-radius: 6px 6px 0 0;
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.15);
+  padding: 12px;
+  padding-bottom: calc(12px + env(safe-area-inset-bottom));
+  animation: slideUp 0.3s ease-out;
+  display: flex;
+  flex-direction: column;
 }
 
 .settings-page .configure-section {
-  overflow-y: scroll;
+  margin-bottom: 0;
+  overflow-y: auto;
 }
 
 .section-title {
