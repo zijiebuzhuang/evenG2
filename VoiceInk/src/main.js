@@ -1,5 +1,7 @@
 import { waitForEvenAppBridge } from '@evenrealities/even_hub_sdk';
 
+const BASE = import.meta.env.BASE_URL;
+
 // --- i18n ---
 const i18n = {
   en: {
@@ -160,7 +162,6 @@ const visualizerState = {
 
 // --- DOM ---
 const settingsPage = document.getElementById('settingsPage');
-const settingsButton = document.getElementById('settingsButton');
 const backButton = document.getElementById('backButton');
 const recordingCard = document.getElementById('recordingCard');
 const recordingTitle = document.getElementById('recordingTitle');
@@ -218,13 +219,13 @@ document.querySelectorAll('.input-toggle-vis').forEach(btn => {
     if (!input) return;
     const isPassword = input.type === 'password';
     input.type = isPassword ? 'text' : 'password';
-    btn.querySelector('img').src = isPassword ? '/eye-show.svg' : '/eye-hide.svg';
+    btn.querySelector('img').src = isPassword ? `${BASE}eye-show.svg` : `${BASE}eye-hide.svg`;
   });
 });
 
 glassesDisplayToggle.addEventListener('click', () => {
   glassesDisplayOn = !glassesDisplayOn;
-  glassesDisplayToggle.src = glassesDisplayOn ? '/toggle-on.svg' : '/toggle-off.svg';
+  glassesDisplayToggle.src = glassesDisplayOn ? `${BASE}toggle-on.svg` : `${BASE}toggle-off.svg`;
 });
 
 // --- Clear History Dialog ---
@@ -347,19 +348,14 @@ languageConfirmBtn.addEventListener('click', () => {
 });
 
 // --- Page Navigation ---
-settingsButton.addEventListener('click', () => {
+function openSettings() {
   settingsPage.classList.remove('hidden');
   whisperKeyInput.value = localStorage.getItem('voiceink_deepgram_key') || '';
   iflytekAppId.value = localStorage.getItem('voiceink_iflytek_appid') || '';
   iflytekApiKey.value = localStorage.getItem('voiceink_iflytek_apikey') || '';
   iflytekApiSecret.value = localStorage.getItem('voiceink_iflytek_apisecret') || '';
-  glassesDisplayToggle.src = glassesDisplayOn ? '/toggle-on.svg' : '/toggle-off.svg';
-  // Show server-managed credential hints
-  const iflytekHint = document.getElementById('iflytekServerHint');
-  const deepgramHint = document.getElementById('deepgramServerHint');
-  if (iflytekHint) iflytekHint.classList.toggle('hidden', !serverHasCredentials);
-  if (deepgramHint) deepgramHint.classList.toggle('hidden', !serverHasCredentials);
-});
+  glassesDisplayToggle.src = glassesDisplayOn ? `${BASE}toggle-on.svg` : `${BASE}toggle-off.svg`;
+}
 
 backButton.addEventListener('click', () => {
   settingsPage.classList.add('hidden');
@@ -416,10 +412,10 @@ function formatHistoryDateLabel(dateKey) {
 function renderHistoryDateTabs(dateKeys) {
   historyDateTabs.innerHTML = '';
   if (dateKeys.length <= 1) {
-    historyDateTabs.style.display = dateKeys.length === 0 ? 'none' : '';
-  } else {
-    historyDateTabs.style.display = '';
+    historyDateTabs.style.display = 'none';
+    return;
   }
+  historyDateTabs.style.display = '';
 
   dateKeys.forEach((dateKey) => {
     const button = document.createElement('button');
@@ -454,17 +450,17 @@ function renderHistory() {
       const hasKey = !!localStorage.getItem('voiceink_deepgram_key');
       historyList.innerHTML = `
         <div class="empty-state">
-          <img src="/nohistory.svg" width="32" height="32">
+          <img src="${BASE}nohistory.svg" width="32" height="32">
           <p>${t('noRecordings')}</p>
           ${hasKey ? '' : `<p class="empty-hint">${t('whisperHint')}</p>`}
           ${hasKey ? '' : `<button class="empty-settings-btn" id="emptySettingsBtn">${t('goToSettings')}</button>`}
         </div>`;
       const btn = document.getElementById('emptySettingsBtn');
-      if (btn) btn.addEventListener('click', () => settingsButton.click());
+      if (btn) btn.addEventListener('click', () => openSettings());
     } else {
       historyList.innerHTML = `
         <div class="empty-state">
-          <img src="/nohistory.svg" width="32" height="32">
+          <img src="${BASE}nohistory.svg" width="32" height="32">
           <p>${t('noRecordings')}</p>
         </div>`;
     }
@@ -487,7 +483,7 @@ function renderHistory() {
 
     const deleteBtn = document.createElement('button');
     deleteBtn.className = 'history-delete-btn';
-    deleteBtn.innerHTML = '<img src="/delete.svg" width="24" height="24">';
+    deleteBtn.innerHTML = `<img src="${BASE}delete.svg" width="24" height="24">`;
     deleteBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       deleteRecording(record.id);
@@ -496,12 +492,12 @@ function renderHistory() {
     const item = document.createElement('div');
     item.className = 'history-item';
     item.innerHTML = `
-      <img src="/record.svg" class="history-item-icon" width="24" height="24">
+      <img src="${BASE}record.svg" class="history-item-icon" width="24" height="24">
       <div class="history-item-content">
         <div class="history-item-name">${record.title}</div>
         <div class="history-item-date">${formatStartTime(new Date(record.startTime))} · ${formatDuration(record.duration)}</div>
       </div>
-      <img src="/chevronArrow.svg" class="history-item-arrow" width="24" height="24">`;
+      <img src="${BASE}chevronArrow.svg" class="history-item-arrow" width="24" height="24">`;
 
     // Swipe-to-delete touch handling
     let startX = 0, currentX = 0, swiping = false;
@@ -819,31 +815,36 @@ function hasCredentials() {
 }
 
 function updateButtons() {
+  const settingsBtn = `
+    <button class="action-button settings-action-btn" id="settingsButton">
+      <img src="${BASE}settings.svg" alt="Settings" width="24" height="24">
+    </button>`;
   if (recordingState === 'stopped') {
     const disabled = !hasCredentials();
     buttonContainer.innerHTML = `
+      ${settingsBtn}
       <button class="action-button primary" id="recordButton"${disabled ? ' disabled' : ''}>
-        <img src="/start.svg" alt="Start" width="24" height="24">
+        <img src="${BASE}start.svg" alt="Start" width="24" height="24">
         <span>${t('startRecording')}</span>
       </button>`;
   } else if (recordingState === 'recording') {
     buttonContainer.innerHTML = `
       <button class="action-button stop" id="stopButton">
-        <img src="/stop.svg" alt="Stop" width="24" height="24">
+        <img src="${BASE}stop.svg" alt="Stop" width="24" height="24">
         <span>${t('stop')}</span>
       </button>
       <button class="action-button secondary" id="pauseButton">
-        <img src="/pause.svg" alt="Pause" width="24" height="24">
+        <img src="${BASE}pause.svg" alt="Pause" width="24" height="24">
         <span>${t('pause')}</span>
       </button>`;
   } else if (recordingState === 'paused') {
     buttonContainer.innerHTML = `
       <button class="action-button stop" id="stopButton">
-        <img src="/stop.svg" alt="Stop" width="24" height="24">
+        <img src="${BASE}stop.svg" alt="Stop" width="24" height="24">
         <span>${t('stop')}</span>
       </button>
       <button class="action-button secondary" id="continueButton">
-        <img src="/continue.svg" alt="Continue" width="24" height="24">
+        <img src="${BASE}continue.svg" alt="Continue" width="24" height="24">
         <span>${t('continue')}</span>
       </button>`;
   }
@@ -852,10 +853,12 @@ function updateButtons() {
   const pauseBtn = document.getElementById('pauseButton');
   const continueBtn = document.getElementById('continueButton');
   const startBtn = document.getElementById('recordButton');
+  const settingsBtnEl = document.getElementById('settingsButton');
   if (stopBtn) stopBtn.addEventListener('click', () => stopRecording());
   if (pauseBtn) pauseBtn.addEventListener('click', () => pauseRecording());
   if (continueBtn) continueBtn.addEventListener('click', () => resumeRecording());
   if (startBtn) startBtn.addEventListener('click', () => startRecording());
+  if (settingsBtnEl) settingsBtnEl.addEventListener('click', () => openSettings());
 }
 
 function saveRecording() {

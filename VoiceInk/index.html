@@ -9,14 +9,6 @@
 <body>
   <div class="container">
     <div class="content-wrapper">
-      <!-- Header -->
-      <div class="header">
-        <h1>VoiceInk</h1>
-        <button class="icon-button" id="settingsButton">
-          <img src="/settings.svg" alt="Settings" width="24" height="24">
-        </button>
-      </div>
-
       <!-- Recording Card -->
       <div class="recording-card" id="recordingCard">
         <div class="recording-card-top">
@@ -112,7 +104,6 @@
         <h2 class="section-title" style="margin-top: 24px;">Chinese ASR</h2>
         <div class="main-card" id="iflytekCard">
           <p class="card-label">iFlytek ASR</p>
-          <p class="card-hint server-hint hidden" id="iflytekServerHint">Server-managed credentials active</p>
           <div class="input-wrapper">
             <input type="text" class="input-box" id="iflytekAppId" placeholder="APPID">
             <button class="input-clear" data-for="iflytekAppId"><img src="/cross.svg" width="16" height="16"></button>
@@ -137,7 +128,6 @@
         <h2 class="section-title" style="margin-top: 24px;">English ASR</h2>
         <div class="main-card" id="deepgramCard">
           <p class="card-label">Deepgram</p>
-          <p class="card-hint server-hint hidden" id="deepgramServerHint">Server-managed credentials active</p>
           <div class="input-wrapper">
             <input type="password" class="input-box" id="whisperKeyInput" placeholder="API Key">
             <button class="input-toggle-vis" data-for="whisperKeyInput"><img src="/eye-hide.svg" width="16" height="16"></button>

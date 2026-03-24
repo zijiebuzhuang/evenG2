@@ -420,6 +420,13 @@ body { -ms-overflow-style: none; scrollbar-width: none; }
   color: var(--text-error);
 }
 
+.action-button.settings-action-btn {
+  flex: none;
+  width: 48px;
+  background: var(--bg-first);
+  color: var(--text-first);
+}
+
 /* Settings page (fixed overlay like MoonWalker) */
 .settings-page {
   position: fixed;
