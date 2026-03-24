@@ -4,17 +4,24 @@
   "description": "VoiceInk - 中文语音实时转文字 G2 应用",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev:frontend": "vite",
+    "dev:server": "node server/index.js",
+    "dev": "concurrently \"npm run dev:server\" \"npm run dev:frontend\"",
     "build": "vite build",
     "preview": "vite preview",
-    "server": "node server/index.js",
+    "deploy:frontend": "npm run build && gh-pages -d dist",
+    "deploy:server": "echo 'Deploy server to your Node host. See DEPLOY.md'",
+    "deploy": "npm run deploy:frontend",
     "qr": "evenhub qr",
+    "qr:prod": "evenhub qr -u ${VOICEINK_APP_URL:-https://voiceink.example.com}",
     "simulator": "evenhub-simulator --glow http://localhost:5173"
   },
   "dependencies": {
     "@evenrealities/even_hub_sdk": "^0.0.7"
   },
   "devDependencies": {
+    "concurrently": "^9.0.0",
+    "gh-pages": "^6.0.0",
     "vite": "^5.0.0"
   },
   "engines": {

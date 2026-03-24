@@ -1,0 +1,32 @@
+# fly.toml — VoiceInk WebSocket server
+# Generated for fly.io deployment
+
+app = "voiceink-server"
+primary_region = "nrt"   # Tokyo; change to: hkg (Hong Kong), sin (Singapore), lax (LA), etc.
+
+[build]
+  # No Dockerfile needed — fly detects Node.js automatically
+
+[env]
+  WS_PORT = "8080"
+  NODE_ENV = "production"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+  # WebSocket keepalive — important for long-running connections
+  [[http_service.checks]]
+    grace_period = "10s"
+    interval = "30s"
+    method = "GET"
+    path = "/health"
+    timeout = "5s"
+
+[[vm]]
+  memory = "256mb"
+  cpu_kind = "shared"
+  cpus = 1

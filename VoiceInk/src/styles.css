@@ -472,6 +472,15 @@ body { -ms-overflow-style: none; scrollbar-width: none; }
 .about-card p { font-size: 15px; line-height: 22px; }
 .about-card .hint { font-size: 13px; color: var(--text-second); }
 
+.card-hint.server-hint {
+  font-size: 12px;
+  color: var(--text-success);
+  margin: 4px 0 8px;
+  padding: 4px 8px;
+  background: rgba(75, 185, 86, 0.1);
+  border-radius: 6px;
+}
+
 .steps-hint {
   margin-top: 12px;
   padding: 0 4px;

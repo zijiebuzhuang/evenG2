@@ -16,6 +16,7 @@ const i18n = {
     notConnected: 'Not Connected',
     ready: 'Ready',
     glassesConnected: 'Glasses Connected',
+    bridgeReady: 'Bridge Ready',
     newConversation: 'New Conversation',
     startRecording: 'Start Recording',
     stop: 'Stop',
@@ -57,6 +58,7 @@ const i18n = {
     notConnected: '未连接',
     ready: '就绪',
     glassesConnected: '眼镜已连接',
+    bridgeReady: '桥接已就绪',
     newConversation: '新对话',
     startRecording: '开始录音',
     stop: '停止',
@@ -90,20 +92,50 @@ function t(key) {
   return i18n[currentLang]?.[key] || i18n.en[key] || key;
 }
 
+// --- WebSocket URL Configuration ---
+function getWebSocketUrl() {
+  // Manual override from localStorage (for debugging)
+  const manualOverride = localStorage.getItem('voiceink_ws_url');
+  if (manualOverride) return manualOverride;
+
+  // Production: use environment variable
+  if (!import.meta.env.DEV) {
+    const prodUrl = import.meta.env.VITE_WS_URL;
+    if (!prodUrl) {
+      console.error('VITE_WS_URL not set in production build. WebSocket will not connect.');
+      return '';
+    }
+    return prodUrl;
+  }
+
+  // Development: derive from current page or use localhost
+  if (typeof window === 'undefined' || !window.location?.hostname) {
+    return 'ws://localhost:8080';
+  }
+  const devHost = import.meta.env.VITE_DEV_WS_HOST || window.location.hostname;
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const host = devHost.includes(':') ? `[${devHost}]` : devHost;
+  return `${protocol}//${host}:8080`;
+}
+
 let currentLang = localStorage.getItem('voiceink_language') || 'en';
 
 // --- State ---
 let bridge = null;
+let bridgeReady = false;
+let glassesAudioSeen = false;
+let activeAudioSource = 'none';
 let ws = null;
 let wsConnected = false;
 let recordingState = 'stopped'; // 'recording' | 'paused' | 'stopped'
 let transcripts = []; // { text, offsetMs }
 let recordings = JSON.parse(localStorage.getItem('voiceink_recordings') || '[]');
-let wsUrl = localStorage.getItem('voiceink_ws_url') || 'ws://localhost:8080';
+let wsUrl = getWebSocketUrl();
 let activeEngine = 'iflytek';
 let reconnectAttempts = 0;
 let selectedHistoryDateKey = '';
 const MAX_RECONNECT = 10;
+let serverHasCredentials = false; // Will be set by server on connect
 
 // Recording timer state
 let recordingStartTime = null;
@@ -112,11 +144,10 @@ let elapsedSeconds = 0;
 let totalPausedMs = 0;
 let pauseStartTime = null;
 
-// Browser mic fallback
+// Legacy browser mic cleanup
 let browserAudioCtx = null;
 let browserMicStream = null;
 let browserWorkletNode = null;
-let useBrowserMic = false;
 
 const visualizerState = {
   rafId: null,
@@ -323,6 +354,11 @@ settingsButton.addEventListener('click', () => {
   iflytekApiKey.value = localStorage.getItem('voiceink_iflytek_apikey') || '';
   iflytekApiSecret.value = localStorage.getItem('voiceink_iflytek_apisecret') || '';
   glassesDisplayToggle.src = glassesDisplayOn ? '/toggle-on.svg' : '/toggle-off.svg';
+  // Show server-managed credential hints
+  const iflytekHint = document.getElementById('iflytekServerHint');
+  const deepgramHint = document.getElementById('deepgramServerHint');
+  if (iflytekHint) iflytekHint.classList.toggle('hidden', !serverHasCredentials);
+  if (deepgramHint) deepgramHint.classList.toggle('hidden', !serverHasCredentials);
 });
 
 backButton.addEventListener('click', () => {
@@ -541,7 +577,10 @@ function connectWebSocket() {
     if (typeof event.data !== 'string') return;
     const msg = JSON.parse(event.data);
 
-    if (msg.type === 'transcription') {
+    if (msg.type === 'capabilities') {
+      serverHasCredentials = !!msg.serverCredentials;
+      updateButtons();
+    } else if (msg.type === 'transcription') {
       addTranscript(msg.text);
     } else if (msg.type === 'transcription_partial') {
       updatePartialTranscript(msg.text);
@@ -755,23 +794,21 @@ function updateRecordingCardUI() {
 }
 
 function updateConnectionStatus() {
-  if (recordingState !== 'stopped') return; // don't override during recording
-  const glassesConnected = !!bridge;
+  if (recordingState !== 'stopped') return;
+  const glassesConnected = bridgeReady && glassesAudioSeen;
+  const fullyReady = wsConnected && glassesConnected;
   connectionDot.style.display = '';
-  if (wsConnected) {
-    connectionDot.classList.add('connected');
-    recordingTitleText.textContent = t('ready');
-    recordingStartTimeEl.textContent = glassesConnected ? t('glassesConnected') : '';
-  } else {
-    connectionDot.classList.remove('connected');
-    recordingTitleText.textContent = t('notConnected');
-    recordingStartTimeEl.textContent = glassesConnected ? t('glassesConnected') : '';
-  }
+  connectionDot.classList.toggle('connected', fullyReady);
+  recordingTitleText.textContent = fullyReady ? t('ready') : t('notConnected');
+  recordingStartTimeEl.textContent = glassesConnected ? t('glassesConnected') : bridgeReady ? t('bridgeReady') : '';
   durationText.textContent = '';
   updateRecordingCardUI();
 }
 
 function hasCredentials() {
+  // Server-managed credentials available — always allow
+  if (serverHasCredentials) return true;
+  // Fallback to client-side localStorage keys (BYO-key / dev mode)
   if (activeEngine === 'iflytek') {
     return !!(localStorage.getItem('voiceink_iflytek_appid') && localStorage.getItem('voiceink_iflytek_apikey'));
   }
@@ -841,9 +878,35 @@ function saveRecording() {
 }
 
 // --- Audio (three-state) ---
+function isGlassesAudioAvailable() {
+  return bridgeReady;
+}
+
+function resetLegacyBrowserMicState() {
+  if (browserWorkletNode) {
+    browserWorkletNode.disconnect();
+    browserWorkletNode = null;
+  }
+  if (browserAudioCtx) {
+    browserAudioCtx.close();
+    browserAudioCtx = null;
+  }
+  if (browserMicStream) {
+    browserMicStream.getTracks().forEach(t => t.stop());
+    browserMicStream = null;
+  }
+}
+
 async function startRecording() {
   if (recordingState !== 'stopped') return;
+  if (!isGlassesAudioAvailable()) {
+    console.warn('Glasses audio is not available');
+    updateConnectionStatus();
+    return;
+  }
+
   recordingState = 'recording';
+  activeAudioSource = 'glasses';
   transcripts = [];
   elapsedSeconds = 0;
   totalPausedMs = 0;
@@ -861,13 +924,11 @@ async function startRecording() {
   }
   wsSend(startMsg);
 
-  if (bridge) {
+  if (bridgeReady) {
     bridge.audioControl(true);
-  } else {
-    await startBrowserMic();
   }
+  resetLegacyBrowserMicState();
 
-  // Update UI
   visualizerState.target = 0;
   visualizerState.intensity = 0;
   updateDurationDot();
@@ -887,15 +948,15 @@ async function startRecording() {
 function pauseRecording() {
   if (recordingState !== 'recording') return;
   recordingState = 'paused';
+  activeAudioSource = 'none';
   pauseStartTime = Date.now();
 
   stopDurationTimer();
 
-  if (bridge) {
+  if (bridgeReady) {
     bridge.audioControl(false);
-  } else {
-    stopBrowserMic();
   }
+  resetLegacyBrowserMicState();
 
   wsSend({ type: 'audio_stop' });
 
@@ -907,7 +968,22 @@ function pauseRecording() {
 
 async function resumeRecording() {
   if (recordingState !== 'paused') return;
+  if (!isGlassesAudioAvailable()) {
+    console.warn('Glasses audio is not available');
+    recordingState = 'stopped';
+    pauseStartTime = null;
+    updateDurationDot();
+    updateButtons();
+    updateSections();
+    updateRecordingCardUI();
+    updateConnectionStatus();
+    updateTabs();
+    updateG2Display();
+    return;
+  }
+
   recordingState = 'recording';
+  activeAudioSource = 'glasses';
 
   if (pauseStartTime) {
     totalPausedMs += Date.now() - pauseStartTime;
@@ -925,11 +1001,10 @@ async function resumeRecording() {
   }
   wsSend(startMsg);
 
-  if (bridge) {
+  if (bridgeReady) {
     bridge.audioControl(true);
-  } else {
-    await startBrowserMic();
   }
+  resetLegacyBrowserMicState();
 
   updateDurationDot();
   updateButtons();
@@ -942,22 +1017,20 @@ async function resumeRecording() {
 function stopRecording() {
   if (recordingState === 'stopped') return;
 
-  const wasRecording = recordingState === 'recording';
+  const wasActive = recordingState === 'recording' || recordingState === 'paused';
   recordingState = 'stopped';
+  activeAudioSource = 'none';
 
   stopDurationTimer();
 
-  if (wasRecording) {
-    if (bridge) {
+  if (wasActive) {
+    if (bridgeReady) {
       bridge.audioControl(false);
-    } else {
-      stopBrowserMic();
     }
-
+    resetLegacyBrowserMicState();
     wsSend({ type: 'audio_stop' });
   }
 
-  // Save recording if there are transcripts
   if (transcripts.length > 0) {
     saveRecording();
   }
@@ -969,52 +1042,6 @@ function stopRecording() {
   updateConnectionStatus();
   updateTabs();
   updateG2Display();
-}
-
-// --- Browser Mic Fallback ---
-async function startBrowserMic() {
-  try {
-    browserMicStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    browserAudioCtx = new AudioContext({ sampleRate: 16000 });
-    const source = browserAudioCtx.createMediaStreamSource(browserMicStream);
-
-    // 用 ScriptProcessor 采集 PCM（兼容性好）
-    const processor = browserAudioCtx.createScriptProcessor(4096, 1, 1);
-    processor.onaudioprocess = (e) => {
-      if (recordingState !== 'recording') return;
-      const float32 = e.inputBuffer.getChannelData(0);
-      // Float32 → Int16 PCM
-      const int16 = new Int16Array(float32.length);
-      for (let i = 0; i < float32.length; i++) {
-        const s = Math.max(-1, Math.min(1, float32[i]));
-        int16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
-      }
-      handleAudioData(new Uint8Array(int16.buffer));
-    };
-
-    source.connect(processor);
-    processor.connect(browserAudioCtx.destination);
-    browserWorkletNode = processor;
-    useBrowserMic = true;
-  } catch (e) {
-    console.error('Browser mic error:', e);
-  }
-}
-
-function stopBrowserMic() {
-  if (browserWorkletNode) {
-    browserWorkletNode.disconnect();
-    browserWorkletNode = null;
-  }
-  if (browserAudioCtx) {
-    browserAudioCtx.close();
-    browserAudioCtx = null;
-  }
-  if (browserMicStream) {
-    browserMicStream.getTracks().forEach(t => t.stop());
-    browserMicStream = null;
-  }
-  useBrowserMic = false;
 }
 
 function getPcmBytes(pcm) {
@@ -1058,7 +1085,8 @@ function updateVisualizerMeter(pcm) {
 }
 
 function handleAudioData(pcm) {
-  if (recordingState !== 'recording') return;
+  if (activeAudioSource !== 'glasses' || recordingState !== 'recording') return;
+  glassesAudioSeen = true;
   const bytes = getPcmBytes(pcm);
   updateVisualizerMeter(bytes);
   wsSendBinary(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength));
@@ -1227,8 +1255,9 @@ async function updateG2Display() {
 
 // --- G2 Events ---
 function handleG2Event(event) {
-  // 音频事件
   if (event.audioEvent?.audioPcm) {
+    glassesAudioSeen = true;
+    updateConnectionStatus();
     handleAudioData(event.audioEvent.audioPcm);
     return;
   }
@@ -1296,7 +1325,9 @@ connectWebSocket();
 
 waitForEvenAppBridge().then(async (b) => {
   bridge = b;
+  bridgeReady = true;
   console.log('G2 bridge initialized');
+  updateConnectionStatus();
   bridge.onEvenHubEvent(handleG2Event);
 
   // 尝试创建页面，失败则延迟重试
@@ -1318,5 +1349,7 @@ waitForEvenAppBridge().then(async (b) => {
 
   await tryCreatePage(5);
 }).catch(e => {
+  bridgeReady = false;
   console.log('G2 bridge not available:', e);
+  updateConnectionStatus();
 });

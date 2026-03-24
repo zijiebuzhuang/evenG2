@@ -1,15 +1,59 @@
 require('dotenv').config();
+const http = require('http');
 const WebSocket = require('ws');
 const { IflytekRealtimeSTT } = require('./stt-iflytek-realtime');
 const { DeepgramRealtimeSTT } = require('./stt-deepgram-realtime');
 
 const PORT = process.env.WS_PORT || 8080;
+const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',') : [];
 
-const wss = new WebSocket.Server({ port: PORT });
-console.log(`VoiceInk server running on ws://localhost:${PORT}`);
+// Check if server has credentials configured
+const SERVER_HAS_IFLYTEK = !!(process.env.IFLYTEK_APP_ID && process.env.IFLYTEK_API_KEY);
+const SERVER_HAS_DEEPGRAM = !!process.env.DEEPGRAM_API_KEY;
+
+const server = http.createServer((req, res) => {
+  if (req.url === '/health' && req.method === 'GET') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ status: 'ok', timestamp: Date.now() }));
+    return;
+  }
+  res.writeHead(404);
+  res.end();
+});
+
+const wss = new WebSocket.Server({
+  server,
+  verifyClient: (info) => {
+    // In development, allow all origins
+    if (!ALLOWED_ORIGINS.length) return true;
+
+    const origin = info.origin || info.req.headers.origin;
+    if (!origin) return false;
+
+    return ALLOWED_ORIGINS.some(allowed => {
+      if (allowed === '*') return true;
+      return origin === allowed || origin.endsWith(allowed);
+    });
+  }
+});
+
+console.log(`VoiceInk server running on port ${PORT}`);
+console.log(`Health check: http://localhost:${PORT}/health`);
+if (ALLOWED_ORIGINS.length) {
+  console.log(`Allowed origins: ${ALLOWED_ORIGINS.join(', ')}`);
+} else {
+  console.log('Allowed origins: * (all, dev mode)');
+}
+console.log(`Server credentials: iFlytek=${SERVER_HAS_IFLYTEK}, Deepgram=${SERVER_HAS_DEEPGRAM}`);
 
 wss.on('connection', (ws) => {
   console.log('Client connected');
+
+  // Send capabilities on connect
+  ws.send(JSON.stringify({
+    type: 'capabilities',
+    serverCredentials: SERVER_HAS_IFLYTEK || SERVER_HAS_DEEPGRAM
+  }));
 
   let recording = false;
 
@@ -37,11 +81,11 @@ wss.on('connection', (ws) => {
         recording = true;
         if (msg.engine) currentEngine = msg.engine;
 
-        // 讯飞走实时 WebSocket
+        // 讯飞走实时 WebSocket — server env takes priority
         if (currentEngine === 'iflytek') {
-          const appId = msg.iflytekAppId || process.env.IFLYTEK_APP_ID;
-          const apiKey = msg.iflytekApiKey || process.env.IFLYTEK_API_KEY;
-          const apiSecret = msg.iflytekApiSecret || process.env.IFLYTEK_API_SECRET || '';
+          const appId = process.env.IFLYTEK_APP_ID || msg.iflytekAppId;
+          const apiKey = process.env.IFLYTEK_API_KEY || msg.iflytekApiKey;
+          const apiSecret = process.env.IFLYTEK_API_SECRET || msg.iflytekApiSecret || '';
           console.log(`iFlytek credentials: appId=${appId ? appId.substring(0, 4) + '...' : 'EMPTY'}, apiKey=${apiKey ? apiKey.substring(0, 4) + '...' : 'EMPTY'}, apiSecret=${apiSecret ? apiSecret.substring(0, 4) + '...' : 'EMPTY'}`);
           if (!appId || !apiKey) {
             ws.send(JSON.stringify({ type: 'error', message: 'No iFlytek credentials configured. Add them in Settings.' }));
@@ -64,7 +108,7 @@ wss.on('connection', (ws) => {
             ws.send(JSON.stringify({ type: 'error', message: err.message }));
           });
         } else if (currentEngine === 'whisper') {
-          const apiKey = msg.deepgramApiKey || process.env.DEEPGRAM_API_KEY;
+          const apiKey = process.env.DEEPGRAM_API_KEY || msg.deepgramApiKey;
           if (!apiKey) {
             ws.send(JSON.stringify({ type: 'error', message: 'No Deepgram API key configured. Add it in Settings.' }));
             recording = false;
@@ -117,3 +161,5 @@ wss.on('connection', (ws) => {
     console.log('Client disconnected');
   });
 });
+
+server.listen(PORT);
