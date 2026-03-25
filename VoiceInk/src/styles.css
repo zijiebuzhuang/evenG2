@@ -559,6 +559,14 @@ body { -ms-overflow-style: none; scrollbar-width: none; }
   justify-content: space-between;
 }
 
+#autoClearCard {
+  margin-top: 6px;
+}
+
+#autoClearCard.hidden {
+  display: none;
+}
+
 .toggle-label {
   font-size: 15px;
   line-height: 19px;

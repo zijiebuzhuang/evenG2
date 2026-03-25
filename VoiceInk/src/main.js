@@ -8,6 +8,9 @@ const i18n = {
     settings: 'Settings',
     display: 'Display',
     glassesDisplay: 'Glasses Display',
+    autoClear: 'Auto Clear',
+    autoClearTitle: 'Auto Clear',
+    autoClearNever: 'Never',
     chineseAsr: 'Chinese ASR',
     englishAsr: 'English ASR',
     general: 'General',
@@ -34,9 +37,9 @@ const i18n = {
     confirm: 'Confirm',
     languageTitle: 'Language',
     iflytekSteps: [
-      'Go to <a class="link-text" href="https://console.xfyun.cn" target="_blank" rel="noopener">console.xfyun.cn</a>',
-      'Create an app and enable the "Real-time ASR" service',
-      'Copy APPID, API Key, and API Secret above',
+      'Go to <a class="link-text" href="https://console.xfyun.cn" target="_blank" rel="noopener">console.xfyun.cn</a> and sign in',
+      'Open Console, create an app, then enable Real-time ASR / Real-time Speech Transcription',
+      'Copy APPID, API Secret, and API Key into Settings above',
     ],
     deepgramSteps: [
       'Go to <a class="link-text" href="https://console.deepgram.com" target="_blank" rel="noopener">console.deepgram.com</a>',
@@ -50,6 +53,9 @@ const i18n = {
     settings: '设置',
     display: '显示',
     glassesDisplay: '眼镜显示',
+    autoClear: '自动清屏',
+    autoClearTitle: '自动清屏',
+    autoClearNever: '永不',
     chineseAsr: '中文语音识别',
     englishAsr: '英文语音识别',
     general: '通用',
@@ -76,9 +82,9 @@ const i18n = {
     confirm: '确认',
     languageTitle: '语言',
     iflytekSteps: [
-      '前往 <a class="link-text" href="https://console.xfyun.cn" target="_blank" rel="noopener">console.xfyun.cn</a>',
-      '创建应用并开通「实时语音转写」服务',
-      '将 APPID、API Key 和 API Secret 填入上方',
+      '前往 <a class="link-text" href="https://console.xfyun.cn" target="_blank" rel="noopener">console.xfyun.cn</a> 并登录账号',
+      '进入控制台，创建应用，然后开通「语音听写（流式版）」或「实时语音转写」',
+      '把 APPID、API Secret 和 API Key 填到上方即可',
     ],
     deepgramSteps: [
       '前往 <a class="link-text" href="https://console.deepgram.com" target="_blank" rel="noopener">console.deepgram.com</a>',
@@ -189,7 +195,16 @@ const iflytekAppId = document.getElementById('iflytekAppId');
 const iflytekApiKey = document.getElementById('iflytekApiKey');
 const iflytekApiSecret = document.getElementById('iflytekApiSecret');
 const glassesDisplayToggle = document.getElementById('glassesDisplayToggle');
+const autoClearCard = document.getElementById('autoClearCard');
+const autoClearValue = document.getElementById('autoClearValue');
+const autoClearModal = document.getElementById('autoClearModal');
+const autoClearModalClose = document.getElementById('autoClearModalClose');
+const autoClearConfirmBtn = document.getElementById('autoClearConfirmBtn');
+const autoClearOptions = autoClearModal.querySelectorAll('.modal-option');
 let glassesDisplayOn = localStorage.getItem('voiceink_glasses_display') !== 'off';
+let glassesAutoClearMs = localStorage.getItem('voiceink_glasses_autoclear') || '5000';
+let tempAutoClearMs = glassesAutoClearMs;
+let g2AutoClearTimer = null;
 
 // --- Input Clear Buttons ---
 const inputKeyMap = {
@@ -225,6 +240,12 @@ document.querySelectorAll('.input-toggle-vis').forEach(btn => {
 glassesDisplayToggle.addEventListener('click', () => {
   glassesDisplayOn = !glassesDisplayOn;
   glassesDisplayToggle.src = glassesDisplayOn ? `${BASE}toggle-on.svg` : `${BASE}toggle-off.svg`;
+  updateDisplaySettingsUI();
+  if (!glassesDisplayOn) {
+    clearG2AutoClearTimer();
+  } else if (recordingState === 'recording') {
+    scheduleG2AutoClear();
+  }
 });
 
 // --- Clear History Dialog ---
@@ -262,6 +283,40 @@ const languageOptions = languageModal.querySelectorAll('.modal-option');
 
 let tempLang = currentLang;
 
+function formatAutoClearValue(value = glassesAutoClearMs) {
+  if (value === 'never') return t('autoClearNever');
+  const seconds = Number(value) / 1000;
+  return seconds >= 60 ? `${seconds / 60}min` : `${seconds}s`;
+}
+
+function updateAutoClearSelection() {
+  autoClearOptions.forEach(opt => {
+    opt.classList.toggle('selected', opt.dataset.clear === tempAutoClearMs);
+  });
+}
+
+function clearG2AutoClearTimer() {
+  if (g2AutoClearTimer) {
+    clearTimeout(g2AutoClearTimer);
+    g2AutoClearTimer = null;
+  }
+}
+
+function scheduleG2AutoClear() {
+  clearG2AutoClearTimer();
+  if (!glassesDisplayOn || recordingState !== 'recording' || glassesAutoClearMs === 'never') return;
+  const delay = Number(glassesAutoClearMs);
+  if (!Number.isFinite(delay) || delay <= 0) return;
+  g2AutoClearTimer = setTimeout(() => {
+    updateG2Display(true);
+  }, delay);
+}
+
+function updateDisplaySettingsUI() {
+  autoClearCard.classList.toggle('hidden', !glassesDisplayOn);
+  autoClearValue.textContent = formatAutoClearValue();
+}
+
 function applyLanguage() {
   // Settings page
   document.querySelectorAll('.section-title').forEach(el => {
@@ -272,6 +327,7 @@ function applyLanguage() {
     if (el.textContent === 'About' || el.textContent === '关于') el.textContent = t('about');
   });
   document.querySelector('.toggle-label').textContent = t('glassesDisplay');
+  document.querySelector('#autoClearCard .settings-card-label').textContent = t('autoClear');
   document.querySelector('#languageCard .settings-card-label').textContent = t('language');
   document.querySelector('#clearHistoryBtn .settings-card-label').textContent = t('clearAllRecordings');
   document.querySelector('.about-card .hint').textContent = t('aboutDesc');
@@ -296,11 +352,17 @@ function applyLanguage() {
   dialogConfirm.textContent = t('clear');
 
   // Language modal
-  document.querySelector('.modal-title').textContent = t('languageTitle');
+  document.querySelector('#languageModal .modal-title').textContent = t('languageTitle');
   languageConfirmBtn.textContent = t('confirm');
 
-  // Language value display
+  // Auto clear modal
+  document.querySelector('#autoClearModal .modal-title').textContent = t('autoClearTitle');
+  autoClearConfirmBtn.textContent = t('confirm');
+  updateAutoClearSelection();
+
+  // Settings values
   languageValue.textContent = currentLang === 'zh' ? '中文' : 'English';
+  updateDisplaySettingsUI();
 
   // Update connection status text
   updateConnectionStatus();
@@ -345,6 +407,36 @@ languageConfirmBtn.addEventListener('click', () => {
   languageModal.classList.add('hidden');
 });
 
+autoClearCard.addEventListener('click', () => {
+  if (!glassesDisplayOn) return;
+  tempAutoClearMs = glassesAutoClearMs;
+  updateAutoClearSelection();
+  autoClearModal.classList.remove('hidden');
+});
+
+autoClearModalClose.addEventListener('click', () => {
+  autoClearModal.classList.add('hidden');
+});
+
+autoClearModal.addEventListener('click', (e) => {
+  if (e.target === autoClearModal) autoClearModal.classList.add('hidden');
+});
+
+autoClearOptions.forEach(opt => {
+  opt.addEventListener('click', () => {
+    tempAutoClearMs = opt.dataset.clear;
+    updateAutoClearSelection();
+  });
+});
+
+autoClearConfirmBtn.addEventListener('click', () => {
+  glassesAutoClearMs = tempAutoClearMs;
+  localStorage.setItem('voiceink_glasses_autoclear', glassesAutoClearMs);
+  autoClearValue.textContent = formatAutoClearValue();
+  if (recordingState === 'recording') scheduleG2AutoClear();
+  autoClearModal.classList.add('hidden');
+});
+
 // --- Page Navigation ---
 function closeSettings() {
   settingsPage.classList.add('hidden');
@@ -358,6 +450,7 @@ function closeSettings() {
   localStorage.setItem('voiceink_iflytek_apikey', iflytekApiKey.value.trim());
   localStorage.setItem('voiceink_iflytek_apisecret', iflytekApiSecret.value.trim());
   localStorage.setItem('voiceink_glasses_display', glassesDisplayOn ? 'on' : 'off');
+  localStorage.setItem('voiceink_glasses_autoclear', glassesAutoClearMs);
   updateButtons();
 }
 
@@ -956,6 +1049,7 @@ function pauseRecording() {
   activeAudioSource = 'none';
   pauseStartTime = Date.now();
 
+  clearG2AutoClearTimer();
   stopDurationTimer();
 
   if (bridgeReady) {
@@ -1026,6 +1120,7 @@ function stopRecording() {
   recordingState = 'stopped';
   activeAudioSource = 'none';
 
+  clearG2AutoClearTimer();
   stopDurationTimer();
 
   if (wasActive) {
@@ -1181,6 +1276,7 @@ function updatePartialTranscript(text) {
   }
   partial.querySelector('.transcript-text').textContent = text;
   transcriptContainer.scrollTop = transcriptContainer.scrollHeight;
+  updateG2Display();
 }
 
 function renderTranscripts() {
@@ -1221,10 +1317,14 @@ function buildWelcomePage() {
   };
 }
 
-function buildTranscriptDisplay() {
+function buildTranscriptDisplay(isCleared = false) {
   const status = recordingState === 'recording' ? '● Recording' : recordingState === 'paused' ? '|| Paused' : '○ Stopped';
-  const latest = transcripts.length > 0 ? transcripts[transcripts.length - 1].text : 'Waiting for voice...';
-  const content = `${status}\n\n${latest}`;
+  const partialText = document.getElementById('partialTranscript')?.querySelector('.transcript-text')?.textContent?.trim() || '';
+  const finalLines = transcripts.slice(-3).map((item) => item.text.trim()).filter(Boolean);
+  const lines = isCleared ? [] : [...finalLines];
+  if (!isCleared && partialText) lines.push(partialText);
+  const body = lines.length > 0 ? lines.join('\n') : 'Waiting for voice...';
+  const content = `${status}\n\n${body}`;
 
   return {
     containerTotalNum: 1,
@@ -1240,7 +1340,7 @@ function buildTranscriptDisplay() {
 
 let g2Initialized = false;
 
-async function updateG2Display() {
+async function updateG2Display(isCleared = false) {
   if (!bridge) return;
   if (!glassesDisplayOn) return;
 
@@ -1249,9 +1349,11 @@ async function updateG2Display() {
       await bridge.createStartUpPageContainer(buildWelcomePage());
       g2Initialized = true;
     } else if (recordingState === 'stopped') {
+      clearG2AutoClearTimer();
       await bridge.rebuildPageContainer(buildWelcomePage());
     } else {
-      await bridge.rebuildPageContainer(buildTranscriptDisplay());
+      await bridge.rebuildPageContainer(buildTranscriptDisplay(isCleared));
+      if (!isCleared) scheduleG2AutoClear();
     }
   } catch (e) {
     console.error('G2 display error:', e);
