@@ -27,6 +27,9 @@
   --bg-accent: #FEF991;
   --bg-input: rgba(35, 35, 35, 0.08);
   --bg-input-focus: rgba(35, 35, 35, 0.12);
+  --toggle-track-on: #232323;
+  --toggle-track-off: #E4E4E4;
+  --border-color: #F6F6F6;
   --spacing-xxs: 4px;
   --spacing-xs: 6px;
   --spacing-s: 12px;
@@ -177,6 +180,21 @@ body { -ms-overflow-style: none; scrollbar-width: none; }
 
 .connection-dot.connected {
   background: var(--text-success);
+}
+
+.connection-dot.connecting {
+  background: var(--text-second);
+  animation: pulse-dot 1s ease-in-out infinite;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+.recording-card.disconnected .recording-card-top {
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .recording-duration {
@@ -448,7 +466,7 @@ body { -ms-overflow-style: none; scrollbar-width: none; }
   background: var(--bg-third);
   width: 100%;
   max-width: 600px;
-  height: min(78vh, 620px);
+  height: min(88vh, 720px);
   border-radius: 6px 6px 0 0;
   box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.15);
   padding: 12px;
@@ -461,6 +479,17 @@ body { -ms-overflow-style: none; scrollbar-width: none; }
 .settings-page .configure-section {
   margin-bottom: 0;
   overflow-y: auto;
+}
+
+.sheet-title {
+  font-size: 17px;
+  line-height: 22px;
+  letter-spacing: -0.17px;
+  font-weight: 400;
+  color: var(--text-first);
+  text-align: center;
+  margin-bottom: 8px;
+  flex-shrink: 0;
 }
 
 .section-title {
@@ -563,7 +592,9 @@ body { -ms-overflow-style: none; scrollbar-width: none; }
   margin-top: 6px;
 }
 
-#autoClearCard.hidden {
+#autoClearCard.hidden,
+#lineCountCard.hidden,
+#nativeLanguageCard.hidden {
   display: none;
 }
 
@@ -575,7 +606,16 @@ body { -ms-overflow-style: none; scrollbar-width: none; }
   color: var(--text-first);
 }
 
-.toggle-icon,
+.toggle-icon {
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: opacity 0.2s;
+  display: inline-block;
+  width: 36px;
+  height: 24px;
+  line-height: 0;
+}
+
 .modal-close {
   cursor: pointer;
   flex-shrink: 0;
@@ -827,7 +867,7 @@ body { -ms-overflow-style: none; scrollbar-width: none; }
 .history-item {
   position: relative;
   padding: 12px 0;
-  border-bottom: 1px solid var(--bg-second);
+  border-bottom: 1px solid var(--border-color);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -916,7 +956,8 @@ body { -ms-overflow-style: none; scrollbar-width: none; }
   opacity: 0.6;
 }
 
-.settings-card + .settings-card {
+.settings-card + .settings-card,
+.toggle-card + .settings-card {
   margin-top: 6px;
 }
 
@@ -1144,4 +1185,99 @@ body { -ms-overflow-style: none; scrollbar-width: none; }
 
 .modal-confirm-button:active {
   opacity: 0.6;
+}
+
+/* ==============================
+   Dark Mode (Even Toolkit tokens-dark)
+   ============================== */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --text-highlight: #0c0a07;
+    --text-first: #f0ebe3;
+    --text-second: #8a7f72;
+    --text-success: #26a69a;
+    --text-error: #ef5350;
+    --bg-highlight: #FFFFFF;
+    --toggle-track-on: #f0ebe3;
+    --toggle-track-off: #3a3228;
+    --bg-first: #2c2620;   /* Lightest surface (Cards, active tabs) */
+    --bg-second: #201c17;  /* Medium surface */
+    --bg-third: #0c0a07;   /* Darkest surface (App background, Modal sheet) */
+    --bg-fourth: #161310;  /* Container backgrounds (Tabs container) */
+    --bg-accent: #FEF991;
+    --bg-input: rgba(255, 255, 255, 0.08);
+    --bg-input-focus: rgba(255, 255, 255, 0.12);
+    --border-color: #3a3228;
+  }
+
+  /* Accent card text stays dark for legibility on yellow bg */
+  .recording-card.recording,
+  .recording-card.disconnected {
+    color: #232323;
+  }
+  .recording-card.recording .recording-title,
+  .recording-card.disconnected .recording-title,
+  .recording-card.recording .recording-start-time,
+  .recording-card.disconnected .recording-start-time {
+    color: #232323;
+  }
+  .recording-card.recording .recording-visualizer-bar,
+  .recording-card.disconnected .recording-visualizer-bar {
+    background: #232323;
+  }
+
+  /* Dark icons: invert #232323 SVGs loaded via <img> */
+  .icon-button img,
+  .history-item-icon,
+  .history-item-arrow,
+  .input-toggle-vis img,
+  .input-clear img,
+  .modal-close img,
+  .settings-card img,
+  .action-button.secondary img,
+  .action-button.settings-action-btn img {
+    filter: invert(1) brightness(0.94);
+  }
+  /* Don't invert icons that are already white or on accent bg */
+  .action-button.primary img,
+  .recording-card.recording img,
+  .recording-card.disconnected img,
+  .history-delete-btn img {
+    filter: none;
+  }
+
+  /* Toggle is now inline SVG — track color handled by CSS variables */
+
+  /* nohistory.svg is #7B7B7B — lighten slightly */
+  .empty-state img {
+    filter: invert(0.6) brightness(1.2);
+  }
+
+  /* check-icon in modal-option::after */
+  .modal-option.selected::after {
+    filter: invert(1) brightness(0.94);
+  }
+
+  /* Hardcoded color overrides */
+  .set-default-btn.disabled {
+    color: rgba(240, 235, 227, 0.2);
+  }
+
+  .card-hint.server-hint {
+    background: rgba(38, 166, 154, 0.12);
+  }
+
+  /* Overlay backgrounds — use official dark token */
+  .settings-page,
+  .dialog-overlay,
+  .modal-overlay {
+    background: rgba(0, 0, 0, 0.6);
+  }
+
+  /* Box shadows — darken for dark mode */
+  .settings-sheet,
+  .dialog,
+  .modal-content {
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.4);
+  }
 }

@@ -3,6 +3,7 @@ const http = require('http');
 const WebSocket = require('ws');
 const { IflytekRealtimeSTT } = require('./stt-iflytek-realtime');
 const { DeepgramRealtimeSTT } = require('./stt-deepgram-realtime');
+const { translate } = require('./translate');
 
 const PORT = process.env.WS_PORT || 8080;
 const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',') : [];
@@ -147,6 +148,18 @@ wss.on('connection', (ws) => {
         }
 
         ws.send(JSON.stringify({ type: 'status', status: 'ready' }));
+      } else if (msg.type === 'translate') {
+        const { id, text, from, to } = msg;
+        if (!text || !from || !to) return;
+        translate(text, from, to)
+          .then((translated) => {
+            ws.send(JSON.stringify({ type: 'translation', id, text: translated }));
+          })
+          .catch((err) => {
+            console.error(`Translation error (id=${id}):`, err.message);
+            // Send empty translation so frontend doesn't stay stuck in 'pending'
+            ws.send(JSON.stringify({ type: 'translation', id, text: '' }));
+          });
       }
     } catch (err) {
       console.error('Invalid message:', err.message);

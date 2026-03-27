@@ -19,7 +19,7 @@ const i18n = {
     about: 'About',
     aboutDesc: 'Chinese STT for Even G2',
     notConnected: 'Not Connected',
-    ready: 'Ready',
+    ready: 'Glasses Connected',
     glassesConnected: 'Glasses Connected',
     bridgeReady: 'Bridge Ready',
     newConversation: 'New Conversation',
@@ -48,6 +48,18 @@ const i18n = {
     ],
     chinese: 'Chinese',
     english: 'English',
+    lineCount: 'Line Count',
+    lineCountTitle: 'Line Count',
+    translation: 'Translation',
+    translationToggle: 'Translation',
+    nativeLanguage: 'Native Language',
+    nativeLanguageTitle: 'Native Language',
+    nativeLangZh: '中文',
+    nativeLangEn: 'English',
+    nativeLangJa: '日本語',
+    nativeLangKo: '한국어',
+    lines: 'lines',
+    connecting: 'Connecting…',
   },
   zh: {
     settings: '设置',
@@ -64,7 +76,7 @@ const i18n = {
     about: '关于',
     aboutDesc: 'Even G2 中文语音转文字',
     notConnected: '未连接',
-    ready: '就绪',
+    ready: '眼镜已连接',
     glassesConnected: '眼镜已连接',
     bridgeReady: '桥接已就绪',
     newConversation: '新对话',
@@ -93,6 +105,18 @@ const i18n = {
     ],
     chinese: '中文',
     english: '英文',
+    lineCount: '显示行数',
+    lineCountTitle: '显示行数',
+    translation: '翻译',
+    translationToggle: '翻译',
+    nativeLanguage: '母语',
+    nativeLanguageTitle: '母语',
+    nativeLangZh: '中文',
+    nativeLangEn: 'English',
+    nativeLangJa: '日本語',
+    nativeLangKo: '한국어',
+    lines: '行',
+    connecting: '连接中…',
   },
 };
 
@@ -136,7 +160,8 @@ let activeAudioSource = 'none';
 let ws = null;
 let wsConnected = false;
 let recordingState = 'stopped'; // 'recording' | 'paused' | 'stopped'
-let transcripts = []; // { text, offsetMs }
+let transcripts = []; // { id, text, offsetMs, translationText, translationStatus }
+let transcriptIdCounter = 0;
 let recordings = JSON.parse(localStorage.getItem('voiceink_recordings') || '[]');
 let wsUrl = getWebSocketUrl();
 let activeEngine = 'iflytek';
@@ -184,7 +209,6 @@ const transcriptSection = document.getElementById('transcriptSection');
 const historySection = document.getElementById('historySection');
 const historyList = document.getElementById('historyList');
 const detailPage = document.getElementById('detailPage');
-const detailBackButton = document.getElementById('detailBackButton');
 const detailTitle = document.getElementById('detailTitle');
 const detailTranscriptList = document.getElementById('detailTranscriptList');
 const buttonContainer = document.getElementById('buttonContainer');
@@ -201,10 +225,52 @@ const autoClearModal = document.getElementById('autoClearModal');
 const autoClearModalClose = document.getElementById('autoClearModalClose');
 const autoClearConfirmBtn = document.getElementById('autoClearConfirmBtn');
 const autoClearOptions = autoClearModal.querySelectorAll('.modal-option');
+
+const lineCountCard = document.getElementById('lineCountCard');
+const lineCountValue = document.getElementById('lineCountValue');
+const lineCountModal = document.getElementById('lineCountModal');
+const lineCountModalClose = document.getElementById('lineCountModalClose');
+const lineCountConfirmBtn = document.getElementById('lineCountConfirmBtn');
+const lineCountOptions = lineCountModal.querySelectorAll('.modal-option');
+
+const translationToggle = document.getElementById('translationToggle');
+const translationToggleLabel = document.getElementById('translationToggleLabel');
+const nativeLanguageCard = document.getElementById('nativeLanguageCard');
+const nativeLanguageValue = document.getElementById('nativeLanguageValue');
+const nativeLanguageModal = document.getElementById('nativeLanguageModal');
+const nativeLanguageModalClose = document.getElementById('nativeLanguageModalClose');
+const nativeLanguageConfirmBtn = document.getElementById('nativeLanguageConfirmBtn');
+const nativeLanguageOptions = nativeLanguageModal.querySelectorAll('.modal-option');
 let glassesDisplayOn = localStorage.getItem('voiceink_glasses_display') !== 'off';
 let glassesAutoClearMs = localStorage.getItem('voiceink_glasses_autoclear') || '5000';
 let tempAutoClearMs = glassesAutoClearMs;
 let g2AutoClearTimer = null;
+
+let glassesLineCount = parseInt(localStorage.getItem('voiceink_glasses_line_count') || '4', 10);
+let tempLineCount = glassesLineCount;
+
+let translationEnabled = localStorage.getItem('voiceink_translation_enabled') === 'on';
+let nativeLanguage = localStorage.getItem('voiceink_native_language') || 'zh';
+let tempNativeLanguage = nativeLanguage;
+
+// --- Toggle Renderer ---
+// Renders the official toolkit toggle as inline SVG so track can change color but knob stays white
+function renderToggle(isOn) {
+  const trackColor = isOn ? 'var(--toggle-track-on)' : 'var(--toggle-track-off)';
+  const knobPath = isOn
+    ? 'M29.25 19.5H21.75V18H19.5V15.75H18V8.25H19.5V6H21.75V4.5H29.25V6H31.5V8.25H33V15.75H31.5V18H29.25V19.5Z'
+    : 'M14.25 19.5H6.75V18H4.5V15.75H3V8.25H4.5V6H6.75V4.5H14.25V6H16.5V8.25H18V15.75H16.5V18H14.25V19.5Z';
+
+  return `<svg width="36" height="24" viewBox="0 0 36 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M30.75 3H33V4.5H34.5V6.75H36V17.25H34.5V19.5H33V21H30.75V22.5H5.25V21H3V19.5H1.5V17.25H0V6.75H1.5V4.5H3V3H5.25V1.5H30.75V3Z" fill="${trackColor}" style="transition: fill 0.2s" />
+    <path d="${knobPath}" fill="white" style="transition: d 0.2s" />
+  </svg>`;
+}
+
+function updateTogglesUI() {
+  glassesDisplayToggle.innerHTML = renderToggle(glassesDisplayOn);
+  translationToggle.innerHTML = renderToggle(translationEnabled);
+}
 
 // --- Input Clear Buttons ---
 const inputKeyMap = {
@@ -239,7 +305,7 @@ document.querySelectorAll('.input-toggle-vis').forEach(btn => {
 
 glassesDisplayToggle.addEventListener('click', () => {
   glassesDisplayOn = !glassesDisplayOn;
-  glassesDisplayToggle.src = glassesDisplayOn ? `${BASE}toggle-on.svg` : `${BASE}toggle-off.svg`;
+  updateTogglesUI();
   updateDisplaySettingsUI();
   if (!glassesDisplayOn) {
     clearG2AutoClearTimer();
@@ -312,15 +378,30 @@ function scheduleG2AutoClear() {
   }, delay);
 }
 
+function formatLineCountValue(count = glassesLineCount) {
+  return `${count} ${t('lines')}`;
+}
+
+const NATIVE_LANG_LABELS = { zh: 'nativeLangZh', en: 'nativeLangEn', ja: 'nativeLangJa', ko: 'nativeLangKo' };
+
+function formatNativeLanguageValue(lang = nativeLanguage) {
+  return t(NATIVE_LANG_LABELS[lang] || 'nativeLangZh');
+}
+
 function updateDisplaySettingsUI() {
   autoClearCard.classList.toggle('hidden', !glassesDisplayOn);
+  lineCountCard.classList.toggle('hidden', !glassesDisplayOn);
   autoClearValue.textContent = formatAutoClearValue();
+  lineCountValue.textContent = formatLineCountValue();
+  nativeLanguageCard.classList.toggle('hidden', !translationEnabled);
+  nativeLanguageValue.textContent = formatNativeLanguageValue();
 }
 
 function applyLanguage() {
   // Settings page
   document.querySelectorAll('.section-title').forEach(el => {
     if (el.textContent === 'Display' || el.textContent === '显示') el.textContent = t('display');
+    if (el.textContent === 'Translation' || el.textContent === '翻译') el.textContent = t('translation');
     if (el.textContent === 'Chinese ASR' || el.textContent === '中文语音识别') el.textContent = t('chineseAsr');
     if (el.textContent === 'English ASR' || el.textContent === '英文语音识别') el.textContent = t('englishAsr');
     if (el.textContent === 'General' || el.textContent === '通用') el.textContent = t('general');
@@ -328,6 +409,9 @@ function applyLanguage() {
   });
   document.querySelector('.toggle-label').textContent = t('glassesDisplay');
   document.querySelector('#autoClearCard .settings-card-label').textContent = t('autoClear');
+  document.querySelector('#lineCountCard .settings-card-label').textContent = t('lineCount');
+  translationToggleLabel.textContent = t('translationToggle');
+  document.querySelector('#nativeLanguageCard .settings-card-label').textContent = t('nativeLanguage');
   document.querySelector('#languageCard .settings-card-label').textContent = t('language');
   document.querySelector('#clearHistoryBtn .settings-card-label').textContent = t('clearAllRecordings');
   document.querySelector('.about-card .hint').textContent = t('aboutDesc');
@@ -360,7 +444,16 @@ function applyLanguage() {
   autoClearConfirmBtn.textContent = t('confirm');
   updateAutoClearSelection();
 
+  // Line count modal
+  document.querySelector('#lineCountModal .modal-title').textContent = t('lineCountTitle');
+  lineCountConfirmBtn.textContent = t('confirm');
+
+  // Native language modal
+  document.querySelector('#nativeLanguageModal .modal-title').textContent = t('nativeLanguageTitle');
+  nativeLanguageConfirmBtn.textContent = t('confirm');
+
   // Settings values
+  document.getElementById('settingsSheetTitle').textContent = t('settings');
   languageValue.textContent = currentLang === 'zh' ? '中文' : 'English';
   updateDisplaySettingsUI();
 
@@ -437,6 +530,85 @@ autoClearConfirmBtn.addEventListener('click', () => {
   autoClearModal.classList.add('hidden');
 });
 
+// --- Line Count Modal ---
+function updateLineCountSelection() {
+  lineCountOptions.forEach(opt => {
+    opt.classList.toggle('selected', opt.dataset.lines === String(tempLineCount));
+  });
+}
+
+lineCountCard.addEventListener('click', () => {
+  if (!glassesDisplayOn) return;
+  tempLineCount = glassesLineCount;
+  updateLineCountSelection();
+  lineCountModal.classList.remove('hidden');
+});
+
+lineCountModalClose.addEventListener('click', () => {
+  lineCountModal.classList.add('hidden');
+});
+
+lineCountModal.addEventListener('click', (e) => {
+  if (e.target === lineCountModal) lineCountModal.classList.add('hidden');
+});
+
+lineCountOptions.forEach(opt => {
+  opt.addEventListener('click', () => {
+    tempLineCount = parseInt(opt.dataset.lines, 10);
+    updateLineCountSelection();
+  });
+});
+
+lineCountConfirmBtn.addEventListener('click', () => {
+  glassesLineCount = tempLineCount;
+  localStorage.setItem('voiceink_glasses_line_count', String(glassesLineCount));
+  lineCountValue.textContent = formatLineCountValue();
+  lineCountModal.classList.add('hidden');
+});
+
+// --- Translation Toggle ---
+translationToggle.addEventListener('click', () => {
+  translationEnabled = !translationEnabled;
+  updateTogglesUI();
+  updateDisplaySettingsUI();
+});
+
+// --- Native Language Modal ---
+function updateNativeLanguageSelection() {
+  nativeLanguageOptions.forEach(opt => {
+    opt.classList.toggle('selected', opt.dataset.nlang === tempNativeLanguage);
+  });
+}
+
+nativeLanguageCard.addEventListener('click', () => {
+  if (!translationEnabled) return;
+  tempNativeLanguage = nativeLanguage;
+  updateNativeLanguageSelection();
+  nativeLanguageModal.classList.remove('hidden');
+});
+
+nativeLanguageModalClose.addEventListener('click', () => {
+  nativeLanguageModal.classList.add('hidden');
+});
+
+nativeLanguageModal.addEventListener('click', (e) => {
+  if (e.target === nativeLanguageModal) nativeLanguageModal.classList.add('hidden');
+});
+
+nativeLanguageOptions.forEach(opt => {
+  opt.addEventListener('click', () => {
+    tempNativeLanguage = opt.dataset.nlang;
+    updateNativeLanguageSelection();
+  });
+});
+
+nativeLanguageConfirmBtn.addEventListener('click', () => {
+  nativeLanguage = tempNativeLanguage;
+  localStorage.setItem('voiceink_native_language', nativeLanguage);
+  nativeLanguageValue.textContent = formatNativeLanguageValue();
+  nativeLanguageModal.classList.add('hidden');
+});
+
 // --- Page Navigation ---
 function closeSettings() {
   settingsPage.classList.add('hidden');
@@ -451,6 +623,9 @@ function closeSettings() {
   localStorage.setItem('voiceink_iflytek_apisecret', iflytekApiSecret.value.trim());
   localStorage.setItem('voiceink_glasses_display', glassesDisplayOn ? 'on' : 'off');
   localStorage.setItem('voiceink_glasses_autoclear', glassesAutoClearMs);
+  localStorage.setItem('voiceink_glasses_line_count', String(glassesLineCount));
+  localStorage.setItem('voiceink_translation_enabled', translationEnabled ? 'on' : 'off');
+  localStorage.setItem('voiceink_native_language', nativeLanguage);
   updateButtons();
 }
 
@@ -460,7 +635,8 @@ function openSettings() {
   iflytekAppId.value = localStorage.getItem('voiceink_iflytek_appid') || '';
   iflytekApiKey.value = localStorage.getItem('voiceink_iflytek_apikey') || '';
   iflytekApiSecret.value = localStorage.getItem('voiceink_iflytek_apisecret') || '';
-  glassesDisplayToggle.src = glassesDisplayOn ? `${BASE}toggle-on.svg` : `${BASE}toggle-off.svg`;
+  updateTogglesUI();
+  updateDisplaySettingsUI();
 }
 
 settingsPage.addEventListener('click', (e) => {
@@ -468,8 +644,8 @@ settingsPage.addEventListener('click', (e) => {
 });
 
 // Detail page
-detailBackButton.addEventListener('click', () => {
-  detailPage.classList.add('hidden');
+detailPage.addEventListener('click', (e) => {
+  if (e.target === detailPage) detailPage.classList.add('hidden');
 });
 
 function openRecordingDetail(record) {
@@ -677,6 +853,13 @@ function connectWebSocket() {
       updatePartialTranscript(msg.text);
     } else if (msg.type === 'error') {
       console.error('Server error:', msg.message);
+    } else if (msg.type === 'translation') {
+      const item = transcripts.find(t => t.id === msg.id);
+      if (item) {
+        item.translationText = msg.text || '';
+        item.translationStatus = 'done';
+        updateG2Display();
+      }
     }
   };
 
@@ -886,15 +1069,55 @@ function updateRecordingCardUI() {
 
 function updateConnectionStatus() {
   if (recordingState !== 'stopped') return;
-  const glassesConnected = bridgeReady && glassesAudioSeen;
-  const fullyReady = wsConnected && glassesConnected;
+  // "Ready" requires WebSocket + Bridge; glassesAudioSeen is only for subtitle detail
+  const fullyReady = wsConnected && bridgeReady;
   connectionDot.style.display = '';
+  connectionDot.classList.remove('connecting');
   connectionDot.classList.toggle('connected', fullyReady);
   recordingTitleText.textContent = fullyReady ? t('ready') : t('notConnected');
-  recordingStartTimeEl.textContent = glassesConnected ? t('glassesConnected') : bridgeReady ? t('bridgeReady') : '';
+  recordingStartTimeEl.textContent = (bridgeReady && glassesAudioSeen) ? t('glassesConnected') : bridgeReady ? t('bridgeReady') : '';
   durationText.textContent = '';
   updateRecordingCardUI();
 }
+
+// Tap the connection card to retry when not connected
+recordingCard.querySelector('.recording-card-top').addEventListener('click', () => {
+  if (recordingState !== 'stopped') return;
+  const fullyReady = wsConnected && bridgeReady;
+  if (fullyReady) return; // already connected, nothing to do
+
+  // Show "Connecting…" state
+  connectionDot.classList.remove('connected');
+  connectionDot.classList.add('connecting');
+  recordingTitleText.textContent = t('connecting');
+  recordingStartTimeEl.textContent = '';
+
+  // Retry WebSocket
+  if (!wsConnected) {
+    reconnectAttempts = 0;
+    connectWebSocket();
+  }
+
+  // Retry bridge
+  if (!bridgeReady) {
+    waitForEvenAppBridge().then(async (b) => {
+      bridge = b;
+      bridgeReady = true;
+      console.log('G2 bridge reconnected');
+      updateConnectionStatus();
+      bridge.onEvenHubEvent(handleG2Event);
+      if (!g2Initialized) {
+        try {
+          const result = await bridge.createStartUpPageContainer(buildWelcomePage());
+          if (result === 0) g2Initialized = true;
+        } catch (e) { console.log('Create page failed on retry:', e); }
+      }
+    }).catch(e => {
+      console.log('G2 bridge retry failed:', e);
+      updateConnectionStatus();
+    });
+  }
+});
 
 function hasCredentials() {
   // Server-managed credentials available — always allow
@@ -1057,6 +1280,7 @@ function pauseRecording() {
   }
   resetLegacyBrowserMicState();
 
+  flushPendingTranslations();
   wsSend({ type: 'audio_stop' });
 
   updateDurationDot();
@@ -1128,6 +1352,7 @@ function stopRecording() {
       bridge.audioControl(false);
     }
     resetLegacyBrowserMicState();
+    flushPendingTranslations();
     wsSend({ type: 'audio_stop' });
   }
 
@@ -1197,7 +1422,152 @@ let lastTranscriptTime = 0;
 const MERGE_THRESHOLD_MS = 3500;
 const SHORT_FRAGMENT_LENGTH = 12;
 const MAX_TRANSCRIPT_SEGMENT_LENGTH = 72;
-const SENTENCE_END_RE = /[。！？!?]$/;
+const SENTENCE_END_RE = /[。！？.!?]$/;
+
+// --- G2 visual line estimation ---
+// G2 container: width=536, padding=12 → usable=512px
+// Firmware fixed font: CJK ~20 chars/line, Latin ~40 chars/line at 512px
+// CJK chars (U+2E80+) occupy roughly 2x width of Latin chars.
+const G2_LINE_WIDTH_UNITS = 60; // 1 Latin char = 1 unit; measured: ~60 English chars/line
+
+function charWidth(ch) {
+  const code = ch.codePointAt(0);
+  // CJK Unified, CJK Ext, CJK Compat, Katakana, Hiragana, Hangul,
+  // CJK Symbols, Fullwidth Forms, CJK Radicals, Bopomofo, Kanbun
+  if (
+    (code >= 0x2E80 && code <= 0x9FFF) ||
+    (code >= 0xF900 && code <= 0xFAFF) ||
+    (code >= 0xFE30 && code <= 0xFE4F) ||
+    (code >= 0xFF00 && code <= 0xFF60) ||
+    (code >= 0xFFE0 && code <= 0xFFE6) ||
+    (code >= 0x1F000 && code <= 0x1FAFF) ||
+    (code >= 0x20000 && code <= 0x2FA1F) ||
+    (code >= 0x30000 && code <= 0x323AF) ||
+    (code >= 0xAC00 && code <= 0xD7AF) ||   // Hangul syllables
+    (code >= 0x3040 && code <= 0x30FF) ||   // Hiragana + Katakana
+    (code >= 0x3000 && code <= 0x303F)      // CJK Symbols & Punctuation
+  ) return 2;
+  return 1;
+}
+
+/**
+ * Take the tail of `text` that fits approximately `maxVisualLines` lines
+ * on the G2 display. We do NOT insert '\n' — let the firmware handle
+ * all word-wrapping natively to avoid misaligned line breaks.
+ * Uses a conservative width (G2_LINE_WIDTH_UNITS - 4) to avoid overflow.
+ */
+function tailTextForG2(text, maxVisualLines) {
+  if (!text) return '';
+  const safeWidth = G2_LINE_WIDTH_UNITS - 4; // conservative margin
+  const maxUnits = maxVisualLines * safeWidth;
+
+  // Walk backwards to find where to cut
+  let units = 0;
+  const chars = [...text]; // spread to handle surrogate pairs
+  let cutIdx = chars.length;
+  for (let i = chars.length - 1; i >= 0; i--) {
+    units += charWidth(chars[i]);
+    if (units > maxUnits) {
+      cutIdx = i + 1;
+      break;
+    }
+  }
+  if (units <= maxUnits) cutIdx = 0;
+  return chars.slice(cutIdx).join('');
+}
+
+/**
+ * Join transcript text entries into a continuous flow string.
+ * Inserts a space between two entries only when the boundary is Latin-script
+ * (i.e. previous char and next char are both narrow / ASCII-like).
+ * CJK text does not need inter-entry spacing.
+ */
+function joinTextsForDisplay(texts) {
+  if (texts.length === 0) return '';
+  let result = texts[0];
+  for (let i = 1; i < texts.length; i++) {
+    const prev = result;
+    const next = texts[i];
+    if (!prev || !next) { result += next; continue; }
+    const lastChar = prev[prev.length - 1];
+    const firstChar = next[0];
+    // Insert space only when both sides are narrow (non-CJK) characters
+    if (charWidth(lastChar) === 1 && charWidth(firstChar) === 1 && lastChar !== ' ' && firstChar !== ' ') {
+      result += ' ' + next;
+    } else {
+      result += next;
+    }
+  }
+  return result;
+}
+
+// --- Translation ---
+
+/**
+ * Detect the actual language of a text string by character composition.
+ * Returns 'ja' | 'ko' | 'zh' | 'en'.
+ */
+function detectTextLanguage(text) {
+  let cjk = 0, hiragana = 0, katakana = 0, hangul = 0, latin = 0;
+  for (const ch of text) {
+    const code = ch.codePointAt(0);
+    if (code >= 0x3040 && code <= 0x309F) hiragana++;
+    else if (code >= 0x30A0 && code <= 0x30FF) katakana++;
+    else if (code >= 0xAC00 && code <= 0xD7AF) hangul++;
+    else if (code >= 0x4E00 && code <= 0x9FFF) cjk++;
+    else if ((code >= 0x41 && code <= 0x5A) || (code >= 0x61 && code <= 0x7A)) latin++;
+  }
+  if (hiragana + katakana > 0) return 'ja';
+  if (hangul > 0) return 'ko';
+  if (cjk > latin) return 'zh';
+  return 'en';
+}
+
+function shouldTranslate() {
+  return translationEnabled;
+}
+
+let translationDebounceTimer = null;
+
+function requestTranslation(transcriptItem) {
+  if (!translationEnabled) return;
+  if (transcriptItem.translationStatus === 'done') return;
+  const detected = detectTextLanguage(transcriptItem.text);
+  if (detected === nativeLanguage) return; // already in native language, skip
+  transcriptItem.translationStatus = 'pending';
+  wsSend({
+    type: 'translate',
+    id: transcriptItem.id,
+    text: transcriptItem.text,
+    from: detected,
+    to: nativeLanguage,
+  });
+}
+
+/**
+ * Schedule a debounced translation for the last transcript item.
+ * Called after each merge — waits for merging to settle before sending.
+ */
+function scheduleTranslation(item) {
+  if (!translationEnabled) return;
+  if (translationDebounceTimer) clearTimeout(translationDebounceTimer);
+  translationDebounceTimer = setTimeout(() => {
+    translationDebounceTimer = null;
+    if (item.translationStatus !== 'done') {
+      requestTranslation(item);
+    }
+  }, 1500); // wait 1.5s after last merge before translating
+}
+
+function flushPendingTranslations() {
+  if (!translationEnabled) return;
+  if (translationDebounceTimer) { clearTimeout(translationDebounceTimer); translationDebounceTimer = null; }
+  for (const item of transcripts) {
+    if (item.text.trim() && item.translationStatus !== 'done' && item.translationStatus !== 'pending') {
+      requestTranslation(item);
+    }
+  }
+}
 
 function addTranscript(text) {
   if (!text || !text.trim()) return;
@@ -1216,10 +1586,15 @@ function addTranscript(text) {
     leadingPunct = leadingPunctMatch[1];
     body = trimmed.slice(leadingPunct.length);
     transcripts[transcripts.length - 1].text += leadingPunct.trim();
+    // Text changed, invalidate previous translation
+    transcripts[transcripts.length - 1].translationStatus = null;
+    transcripts[transcripts.length - 1].translationText = '';
   }
 
   if (!body) {
-    // 纯标点，已追加到上一条
+    // 纯标点，已追加到上一条 — re-translate if needed
+    const prev = transcripts[transcripts.length - 1];
+    if (prev && SENTENCE_END_RE.test(prev.text)) requestTranslation(prev);
     lastTranscriptTime = now;
     updateRecordingTitle();
     renderTranscripts();
@@ -1228,6 +1603,7 @@ function addTranscript(text) {
   }
 
   // 讯飞实时模式分段过碎，优先把短句和近邻片段并回上一条
+  let targetItem;
   if (activeEngine === 'iflytek' && transcripts.length > 0) {
     const previous = transcripts[transcripts.length - 1];
     const withinMergeWindow = (now - lastTranscriptTime) < MERGE_THRESHOLD_MS;
@@ -1237,12 +1613,39 @@ function addTranscript(text) {
 
     if ((withinMergeWindow || shouldMergeShortFragment) && (!previousEndsSentence || shouldMergeShortFragment) && hasRoom) {
       previous.text += body;
+      // Text changed — schedule re-translation after merge settles
+      previous.translationStatus = null;
+      previous.translationText = '';
+      targetItem = previous;
+      scheduleTranslation(previous);
     } else {
-      transcripts.push({ text: body, offsetMs });
+      const newItem = { id: ++transcriptIdCounter, text: body, offsetMs, translationText: '', translationStatus: null };
+      transcripts.push(newItem);
+      targetItem = newItem;
+      // Previous item is now finalized, translate it if it hasn't been
+      if (shouldTranslate() && previous.translationStatus !== 'done') {
+        requestTranslation(previous);
+      }
     }
   } else {
-    transcripts.push({ text: body, offsetMs });
+    const newItem = { id: ++transcriptIdCounter, text: body, offsetMs, translationText: '', translationStatus: null };
+    transcripts.push(newItem);
+    targetItem = newItem;
+    // Translate previous finalized item if present
+    if (transcripts.length > 1) {
+      const previous = transcripts[transcripts.length - 2];
+      if (shouldTranslate() && previous.translationStatus !== 'done') {
+        requestTranslation(previous);
+      }
+    }
   }
+
+  // If current item ends with sentence punctuation, translate immediately
+  if (SENTENCE_END_RE.test(targetItem.text)) {
+    if (translationDebounceTimer) { clearTimeout(translationDebounceTimer); translationDebounceTimer = null; }
+    requestTranslation(targetItem);
+  }
+
   lastTranscriptTime = now;
   updateRecordingTitle();
   renderTranscripts();
@@ -1318,14 +1721,52 @@ function buildWelcomePage() {
 }
 
 function buildTranscriptDisplay(isCleared = false) {
-  const status = recordingState === 'recording' ? '● Recording' : recordingState === 'paused' ? '|| Paused' : '○ Stopped';
   const partialText = document.getElementById('partialTranscript')?.querySelector('.transcript-text')?.textContent?.trim() || '';
-  const finalLines = transcripts.slice(-3).map((item) => item.text.trim()).filter(Boolean);
-  const lines = isCleared ? [] : [...finalLines];
-  if (!isCleared && partialText) lines.push(partialText);
-  const body = lines.length > 0 ? lines.join('\n') : 'Waiting for voice...';
-  const content = `${status}\n\n${body}`;
 
+  if (isCleared) {
+    return buildG2Container('Waiting for voice...');
+  }
+
+  const maxLines = glassesLineCount;
+
+  if (translationEnabled) {
+    // Bilingual mode: foreign on top, native on bottom
+    // The separator '───' takes 1 visual line
+    const foreignMaxLines = Math.ceil(maxLines / 2);
+    const nativeMaxLines = Math.floor(maxLines / 2);
+
+    // Collect foreign text as continuous flow
+    const foreignTexts = transcripts.map(item => item.text.trim()).filter(Boolean);
+    if (partialText) foreignTexts.push(partialText);
+    const foreignFlow = joinTextsForDisplay(foreignTexts);
+    const foreignBody = tailTextForG2(foreignFlow, foreignMaxLines);
+
+    // Collect native text as continuous flow
+    const nativeTexts = transcripts
+      .map(item => (item.translationText || '').trim())
+      .filter(Boolean);
+    const nativeFlow = joinTextsForDisplay(nativeTexts);
+    const nativeBody = tailTextForG2(nativeFlow, nativeMaxLines);
+
+    const parts = [];
+    if (foreignBody) parts.push(foreignBody);
+    if (nativeBody) {
+      if (parts.length > 0) parts.push('───');
+      parts.push(nativeBody);
+    }
+    const body = parts.length > 0 ? parts.join('\n') : 'Waiting for voice...';
+    return buildG2Container(body);
+  }
+
+  // Normal mode: concatenate all text into continuous flow, wrap and take last N lines
+  const texts = transcripts.map(item => item.text.trim()).filter(Boolean);
+  if (partialText) texts.push(partialText);
+  const flow = joinTextsForDisplay(texts);
+  const body = flow ? tailTextForG2(flow, maxLines) : 'Waiting for voice...';
+  return buildG2Container(body);
+}
+
+function buildG2Container(content) {
   return {
     containerTotalNum: 1,
     textObject: [{
@@ -1350,6 +1791,7 @@ async function updateG2Display(isCleared = false) {
       g2Initialized = true;
     } else if (recordingState === 'stopped') {
       clearG2AutoClearTimer();
+      console.log('[G2] Stopped → rebuilding welcome page');
       await bridge.rebuildPageContainer(buildWelcomePage());
     } else {
       await bridge.rebuildPageContainer(buildTranscriptDisplay(isCleared));
@@ -1425,6 +1867,7 @@ tabWhisper.addEventListener('click', () => {
 // --- Init ---
 // WebSocket 和 G2 bridge 并行初始化，互不阻塞
 applyLanguage();
+updateTogglesUI();
 updateDurationDot();
 updateRecordingCardUI();
 updateSections();

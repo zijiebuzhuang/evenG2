@@ -1,6 +1,22 @@
 {
+  "package_id": "com.zijiechen.voiceink",
+  "edition": "202601",
   "name": "VoiceInk",
-  "description": "中文语音实时转文字",
   "version": "0.4.2",
-  "author": "zijiechen"
+  "min_app_version": "2.0.0",
+  "min_sdk_version": "0.0.7",
+  "entrypoint": "index.html",
+  "description": "中文语音实时转文字",
+  "author": "zijiechen",
+  "permissions": [
+    {
+      "name": "g2-microphone",
+      "desc": "录制语音用于实时转写"
+    },
+    {
+      "name": "network",
+      "desc": "连接语音识别服务器"
+    }
+  ],
+  "supported_languages": ["zh", "en", "ja", "ko"]
 }
