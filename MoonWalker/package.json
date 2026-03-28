@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "pack": "vite build && cp dist/assets/* dist/fonts/* dist/ 2>/dev/null; evenhub pack app.json ./dist -o moonwalker.ehpk",
     "preview": "vite preview",
     "qr": "evenhub qr",
     "simulator": "evenhub-simulator http://localhost:5173",
