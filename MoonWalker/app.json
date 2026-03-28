@@ -1,9 +1,23 @@
 {
   "name": "MoonWalker",
-  "packageName": "com.moonwalker.nav",
-  "version": "1.0.0",
+  "package_id": "com.moonwalker.nav",
+  "version": "1.3.0",
   "description": "简洁的漫步导航 - 只显示方向和距离",
   "author": "zijiechen",
   "icon": "icon.png",
-  "entryPoint": "index.html"
+  "entrypoint": "index.html",
+  "edition": "202601",
+  "min_app_version": "1.0.0",
+  "min_sdk_version": "0.0.8",
+  "permissions": [
+    {
+      "name": "location",
+      "desc": "Uses GPS to calculate bearing and distance to your destination."
+    },
+    {
+      "name": "network",
+      "desc": "Fetches map data and philosophy quotes."
+    }
+  ],
+  "supported_languages": ["en", "zh"]
 }

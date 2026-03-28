@@ -3,16 +3,19 @@ import { waitForEvenAppBridge, ImageContainerProperty, RebuildPageContainer } fr
 // Amap API Key (from environment variable)
 const AMAP_KEY = import.meta.env.VITE_AMAP_KEY;
 
+// Base URL for assets (handles sub-path deployment)
+const BASE = import.meta.env.BASE_URL;
+
 // --- SVG Icon Constants ---
 const ICON_NAV_ARROW = `
   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M13.5 21.75H12V20.25H13.5V21.75ZM15 20.25H13.5V18.75H15V20.25ZM16.5 18.75H15V17.25H16.5V18.75ZM18 17.25H16.5V15.75H18V17.25ZM19.5 15.75H18V14.25H19.5V15.75ZM21 14.25H19.5V12.75H21V14.25ZM19.5 12.75H1.5V11.25H19.5V12.75ZM22.5 11.25V12.75H21V11.25H22.5ZM21 11.25H19.5V9.75H21V11.25ZM19.5 9.75H18V8.25H19.5V9.75ZM18 8.25H16.5V6.75H18V8.25ZM16.5 6.75H15V5.25H16.5V6.75ZM15 5.25H13.5V3.75H15V5.25ZM13.5 3.75H12V2.25H13.5V3.75Z" fill="white"/>
+    <path d="M13.5 21.75H12V20.25H13.5V21.75ZM15 20.25H13.5V18.75H15V20.25ZM16.5 18.75H15V17.25H16.5V18.75ZM18 17.25H16.5V15.75H18V17.25ZM19.5 15.75H18V14.25H19.5V15.75ZM21 14.25H19.5V12.75H21V14.25ZM19.5 12.75H1.5V11.25H19.5V12.75ZM22.5 11.25V12.75H21V11.25H22.5ZM21 11.25H19.5V9.75H21V11.25ZM19.5 9.75H18V8.25H19.5V9.75ZM18 8.25H16.5V6.75H18V8.25ZM16.5 6.75H15V5.25H16.5V6.75ZM15 5.25H13.5V3.75H15V5.25ZM13.5 3.75H12V2.25H13.5V3.75Z" fill="currentColor"/>
   </svg>`;
 
 const ICON_CANCEL = `
   <svg width="24" height="24" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
     <g clip-path="url(#clip0_cancel)">
-      <path d="M22 27H10V25H22V27ZM24 25H22V23H24V25ZM26 23H24V15H26V23ZM14 19H12V17H14V19ZM12 17H10V15H12V17ZM10 15H8V13H10V15ZM24 15H22V13H24V15ZM8 13H6V11H8V13ZM22 13H10V11H22V13ZM10 11H8V9H10V11ZM12 9H10V7H12V9ZM14 7H12V5H14V7Z" fill="white"/>
+      <path d="M22 27H10V25H22V27ZM24 25H22V23H24V25ZM26 23H24V15H26V23ZM14 19H12V17H14V19ZM12 17H10V15H12V17ZM10 15H8V13H10V15ZM24 15H22V13H24V15ZM8 13H6V11H8V13ZM22 13H10V11H22V13ZM10 11H8V9H10V11ZM12 9H10V7H12V9ZM14 7H12V5H14V7Z" fill="currentColor"/>
     </g>
     <defs>
       <clipPath id="clip0_cancel">
@@ -70,7 +73,7 @@ function createWelcomeTextObjects() {
       height: 80,
       borderWidth: 0,
       borderColor: 0,
-      borderRdaius: 0,
+      borderRadius: 0,
       paddingLength: 0,
       containerID: 1001,
       containerName: 'title',
@@ -84,7 +87,7 @@ function createWelcomeTextObjects() {
       height: 150,
       borderWidth: 0,
       borderColor: 0,
-      borderRdaius: 0,
+      borderRadius: 0,
       paddingLength: 0,
       containerID: 1002,
       containerName: 'intro',
@@ -116,8 +119,6 @@ const state = {
   },
   currentHeading: null, // Device heading in degrees (0-360, null if unavailable)
   orientationSupported: false, // Whether orientation is available
-  mockLocationEnabled: false, // Use mock location instead of GPS
-  mockLocation: 'applepark', // Selected mock location (beijing, shanghai, shenzhen, applepark)
   displayPosition: 'top' // Display position on G2 (top, middle, bottom)
 };
 
@@ -219,32 +220,6 @@ function saveContentSourcesSetting() {
     localStorage.setItem('contentSources', JSON.stringify(state.contentSources));
   } catch (error) {
     console.error('Failed to save content sources setting:', error);
-  }
-}
-
-// Load mock location setting from localStorage
-function loadMockLocationSetting() {
-  try {
-    const enabled = localStorage.getItem('mockLocationEnabled');
-    const location = localStorage.getItem('mockLocation');
-    if (enabled !== null) {
-      state.mockLocationEnabled = JSON.parse(enabled);
-    }
-    if (location !== null) {
-      state.mockLocation = location;
-    }
-  } catch (error) {
-    console.error('Failed to load mock location setting:', error);
-  }
-}
-
-// Save mock location setting to localStorage
-function saveMockLocationSetting() {
-  try {
-    localStorage.setItem('mockLocationEnabled', JSON.stringify(state.mockLocationEnabled));
-    localStorage.setItem('mockLocation', state.mockLocation);
-  } catch (error) {
-    console.error('Failed to save mock location setting:', error);
   }
 }
 
@@ -463,14 +438,6 @@ async function createInitialPage() {
   try {
     console.log('createInitialPage called, isConnected:', state.isConnected, 'pageCreated:', state.pageCreated);
 
-    // First try to clear any existing page
-    try {
-      await state.bridge.clearStartUpPageContainer();
-      console.log('Cleared existing page');
-    } catch (e) {
-      console.log('No existing page to clear or clear failed:', e);
-    }
-
     const result = await state.bridge.createStartUpPageContainer({
       containerTotalNum: 2,
       textObject: createWelcomeTextObjects(),
@@ -654,24 +621,6 @@ async function searchLocationPhoton(keyword) {
   }
 }
 
-// Preset locations for fallback
-const PRESET_LOCATIONS = [
-  { name: 'Beijing', lat: 39.9042, lng: 116.4074 },
-  { name: 'Shanghai', lat: 31.2304, lng: 121.4737 },
-  { name: 'Shenzhen', lat: 22.5431, lng: 114.0579 },
-  { name: 'Apple Park', lat: 37.3349, lng: -122.009 }
-];
-
-// Get preset location by key
-function getPresetLocation(key) {
-  const locations = {
-    beijing: PRESET_LOCATIONS[0],
-    shanghai: PRESET_LOCATIONS[1],
-    shenzhen: PRESET_LOCATIONS[2],
-    applepark: PRESET_LOCATIONS[3]
-  };
-  return locations[key] || locations.applepark;
-}
 
 // Initialize device orientation tracking (iOS/Android compatible)
 async function initOrientation() {
@@ -718,14 +667,7 @@ async function initOrientation() {
 
 // Get user's current location with multi-layer fallback
 async function getUserLocation() {
-  // Priority 0: Mock location (if enabled in settings)
-  if (state.mockLocationEnabled) {
-    const mockLoc = getPresetLocation(state.mockLocation);
-    console.log('Using mock location:', mockLoc.name);
-    return { lat: mockLoc.lat, lng: mockLoc.lng };
-  }
-
-  // Priority 1: URL parameters (for simulator debugging)
+    // Priority 1: URL parameters (for simulator debugging)
   const urlParams = new URLSearchParams(window.location.search);
   const urlLat = urlParams.get('lat');
   const urlLng = urlParams.get('lng');
@@ -866,7 +808,7 @@ async function switchToNavigationMode() {
           height: 80,
           borderWidth: 0,
           borderColor: 0,
-          borderRdaius: 0,
+          borderRadius: 0,
           paddingLength: 0,
           containerID: 1002,
           containerName: 'distance',
@@ -880,7 +822,7 @@ async function switchToNavigationMode() {
           height: 60,
           borderWidth: 0,
           borderColor: 0,
-          borderRdaius: 0,
+          borderRadius: 0,
           paddingLength: 0,
           containerID: 1003,
           containerName: 'quote',
@@ -935,12 +877,9 @@ async function startNavigationCore() {
   if (!state.selectedLocation) return;
 
   try {
-    if (!state.bridge || !state.isConnected) {
-      updateStatus('Glasses disconnected', 'error');
-      return;
-    }
+    const glassesConnected = state.bridge && state.isConnected;
 
-    if (!state.pageCreated) {
+    if (glassesConnected && !state.pageCreated) {
       await createInitialPage();
       if (!state.pageCreated) {
         updateStatus('Initialization failed', 'error');
@@ -956,10 +895,14 @@ async function startNavigationCore() {
     // Update button to show "Cancel Navigation"
     setNavButtonContent('Cancel Navigation', true);
 
-    await switchToNavigationMode();
+    if (glassesConnected) {
+      await switchToNavigationMode();
+    } else {
+      updateStatus('Navigating (glasses not connected)', 'info');
+    }
 
     // Update quote every 10 minutes (only if philosophy is enabled)
-    if (state.philosophyEnabled) {
+    if (state.philosophyEnabled && glassesConnected) {
       state.quoteInterval = setInterval(async () => {
         const newQuote = await fetchQuoteFromEnabledSources();
         await updateQuoteOnGlasses(newQuote);
@@ -997,11 +940,19 @@ async function startNavigationCore() {
           displayText = `${Math.round(bearing)}° ${distanceText}`;
         }
 
-        await updateGlassesDisplay(displayText);
+        // Update glasses if connected, always log to console
+        if (glassesConnected) {
+          await updateGlassesDisplay(displayText);
+        }
+        console.log(`🧭 ${displayText} → ${state.selectedLocation.name}`);
 
         // Arrived (within 50m)
         if (distance < 50) {
-          await updateGlassesDisplay('✓ Arrived');
+          if (glassesConnected) {
+            await updateGlassesDisplay('✓ Arrived');
+          }
+          console.log('✅ Arrived at destination!');
+          updateStatus('Arrived!', 'success');
           setTimeout(() => stopNavigation(), 3000);
         }
       } catch (error) {
@@ -1034,15 +985,12 @@ async function stopNavigation() {
 
   if (state.bridge && state.isConnected && state.pageCreated) {
     try {
-      // Clear first to prevent ID conflicts between modes
-      await state.bridge.clearStartUpPageContainer();
-
-      // Completely recreate initial page
-      const result = await state.bridge.createStartUpPageContainer({
+      // Rebuild back to welcome layout (don't re-call createStartUpPageContainer)
+      const result = await state.bridge.rebuildPageContainer(new RebuildPageContainer({
         containerTotalNum: 2,
         textObject: createWelcomeTextObjects(),
         imageObject: []
-      });
+      }));
 
       if (result === 0) {
         console.log('Welcome page restored');
@@ -1078,7 +1026,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const navButton = document.getElementById('navButton');
   const mapTabs = document.querySelectorAll('.map-tab');
   const settingsButton = document.getElementById('settingsButton');
-  const backButton = document.getElementById('backButton');
   const settingsPage = document.getElementById('settingsPage');
   const container = document.querySelector('.container');
   const philosophyToggle = document.getElementById('philosophyToggle');
@@ -1093,15 +1040,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const permissionModal = document.getElementById('permissionModal');
   const permissionCancelBtn = document.getElementById('permissionCancelBtn');
   const permissionConfirmBtn = document.getElementById('permissionConfirmBtn');
-  const mockLocationToggle = document.getElementById('mockLocationToggle');
-  const mockLocationCard = document.getElementById('mockLocationCard');
-  const mockLocationButton = document.getElementById('mockLocationButton');
-  const mockLocationValue = document.getElementById('mockLocationValue');
-  const mockLocationModal = document.getElementById('mockLocationModal');
-  const mockLocationModalOptions = document.querySelectorAll('#mockLocationModal .modal-option');
-  const mockLocationModalCloseButton = document.getElementById('mockLocationModalCloseButton');
-  const mockLocationModalConfirmButton = document.getElementById('mockLocationModalConfirmButton');
-  const displayPositionButton = document.getElementById('displayPositionButton');
+                  const displayPositionButton = document.getElementById('displayPositionButton');
   const displayPositionValue = document.getElementById('displayPositionValue');
   const displayPositionModal = document.getElementById('displayPositionModal');
   const displayPositionModalOptions = document.querySelectorAll('#displayPositionModal .modal-option');
@@ -1110,7 +1049,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
   let searchTimeout;
   let tempSelectedDuration = null; // Temporary selection before confirmation
-  let tempSelectedMockLocation = null; // Temporary mock location selection
   let tempSelectedDisplayPosition = null; // Temporary display position selection
 
   // Load settings
@@ -1118,8 +1056,7 @@ document.addEventListener('DOMContentLoaded', () => {
   loadPhilosophySetting();
   loadQuoteDurationSetting();
   loadContentSourcesSetting();
-  loadMockLocationSetting();
-  loadDisplayPositionSetting();
+    loadDisplayPositionSetting();
 
   // Initialize orientation tracking
   initOrientation();
@@ -1136,50 +1073,29 @@ document.addEventListener('DOMContentLoaded', () => {
   // Initialize duration display
   updateDurationDisplay();
 
+  // Render pixel-art toggle SVG (matches VoiceInk)
+  function renderToggle(isOn) {
+    const trackColor = isOn ? 'var(--toggle-track-on, #232323)' : 'var(--toggle-track-off, #E4E4E4)';
+    const knobPath = isOn
+      ? 'M29.25 19.5H21.75V18H19.5V15.75H18V8.25H19.5V6H21.75V4.5H29.25V6H31.5V8.25H33V15.75H31.5V18H29.25V19.5Z'
+      : 'M14.25 19.5H6.75V18H4.5V15.75H3V8.25H4.5V6H6.75V4.5H14.25V6H16.5V8.25H18V15.75H16.5V18H14.25V19.5Z';
+
+    return `<svg width="36" height="24" viewBox="0 0 36 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M30.75 3H33V4.5H34.5V6.75H36V17.25H34.5V19.5H33V21H30.75V22.5H5.25V21H3V19.5H1.5V17.25H0V6.75H1.5V4.5H3V3H5.25V1.5H30.75V3Z" fill="${trackColor}" style="transition: fill 0.2s" />
+      <path d="${knobPath}" fill="white" style="transition: d 0.2s" />
+    </svg>`;
+  }
+
   // Update toggle UI based on saved setting
   function updateToggleUI() {
-    const toggleImg = philosophyToggle.querySelector('img');
-    if (state.philosophyEnabled) {
-      toggleImg.src = '/toggle-on.svg';
-      philosophyToggle.dataset.enabled = 'true';
-    } else {
-      toggleImg.src = '/toggle-off.svg';
-      philosophyToggle.dataset.enabled = 'false';
-    }
+    philosophyToggle.innerHTML = renderToggle(state.philosophyEnabled);
+    philosophyToggle.dataset.enabled = state.philosophyEnabled ? 'true' : 'false';
   }
 
   // Initialize toggle UI
   updateToggleUI();
 
-  // Update mock location toggle UI
-  function updateMockLocationToggleUI() {
-    const toggleImg = mockLocationToggle.querySelector('img');
-    if (state.mockLocationEnabled) {
-      toggleImg.src = '/toggle-on.svg';
-      mockLocationToggle.dataset.enabled = 'true';
-      mockLocationCard.style.display = 'flex';
-    } else {
-      toggleImg.src = '/toggle-off.svg';
-      mockLocationToggle.dataset.enabled = 'false';
-      mockLocationCard.style.display = 'none';
-    }
-  }
-
-  // Update mock location display
-  function updateMockLocationDisplay() {
-    const locationNames = {
-      beijing: 'Beijing',
-      shanghai: 'Shanghai',
-      shenzhen: 'Shenzhen',
-      applepark: 'Apple Park'
-    };
-    mockLocationValue.textContent = locationNames[state.mockLocation] || 'Apple Park';
-  }
-
-  // Initialize mock location UI
-  updateMockLocationToggleUI();
-  updateMockLocationDisplay();
-
+    
   // Update display position display
   function updateDisplayPositionDisplay() {
     const positionNames = { top: 'Top Left', middle: 'Middle Left', bottom: 'Bottom Left' };
@@ -1195,10 +1111,10 @@ document.addEventListener('DOMContentLoaded', () => {
     Object.entries(toggles).forEach(([key, toggle]) => {
       const img = toggle.querySelector('img');
       if (state.contentSources[key]) {
-        img.src = '/checked.svg';
+        img.src = `${BASE}checked.svg`;
         toggle.dataset.checked = 'true';
       } else {
-        img.src = '/unchecked.svg';
+        img.src = `${BASE}unchecked.svg`;
         toggle.dataset.checked = 'false';
       }
     });
@@ -1260,71 +1176,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // Mock location toggle handler
-  mockLocationToggle.addEventListener('click', () => {
-    state.mockLocationEnabled = !state.mockLocationEnabled;
-    saveMockLocationSetting();
-    updateMockLocationToggleUI();
-    console.log('Mock location:', state.mockLocationEnabled ? 'enabled' : 'disabled');
-  });
-
-  // Mock location button handler - open modal
-  mockLocationButton.addEventListener('click', () => {
-    tempSelectedMockLocation = state.mockLocation;
-    mockLocationModal.classList.remove('hidden');
-
-    // Update selected state
-    mockLocationModalOptions.forEach(option => {
-      const location = option.dataset.location;
-      if (location === state.mockLocation) {
-        option.classList.add('selected');
-      } else {
-        option.classList.remove('selected');
-      }
-    });
-  });
-
-  // Mock location modal option handlers
-  mockLocationModalOptions.forEach(option => {
-    option.addEventListener('click', () => {
-      const location = option.dataset.location;
-      tempSelectedMockLocation = location;
-
-      // Update UI to show selection
-      mockLocationModalOptions.forEach(opt => {
-        if (opt.dataset.location === location) {
-          opt.classList.add('selected');
-        } else {
-          opt.classList.remove('selected');
-        }
-      });
-    });
-  });
-
-  // Mock location modal confirm button
-  mockLocationModalConfirmButton.addEventListener('click', () => {
-    if (tempSelectedMockLocation !== null) {
-      state.mockLocation = tempSelectedMockLocation;
-      saveMockLocationSetting();
-      updateMockLocationDisplay();
-      console.log('Mock location set to:', state.mockLocation);
-    }
-    mockLocationModal.classList.add('hidden');
-  });
-
-  // Close mock location modal
-  mockLocationModal.addEventListener('click', (e) => {
-    if (e.target === mockLocationModal) {
-      mockLocationModal.classList.add('hidden');
-      tempSelectedMockLocation = null;
-    }
-  });
-
-  mockLocationModalCloseButton.addEventListener('click', () => {
-    mockLocationModal.classList.add('hidden');
-    tempSelectedMockLocation = null;
-  });
-
   // Display position button handler - open modal
   displayPositionButton.addEventListener('click', () => {
     tempSelectedDisplayPosition = state.displayPosition;
@@ -1381,7 +1232,7 @@ document.addEventListener('DOMContentLoaded', () => {
                   height: 80,
                   borderWidth: 0,
                   borderColor: 0,
-                  borderRdaius: 0,
+                  borderRadius: 0,
                   paddingLength: 0,
                   containerID: 1002,
                   containerName: 'distance',
@@ -1395,7 +1246,7 @@ document.addEventListener('DOMContentLoaded', () => {
                   height: 60,
                   borderWidth: 0,
                   borderColor: 0,
-                  borderRdaius: 0,
+                  borderRadius: 0,
                   paddingLength: 0,
                   containerID: 1003,
                   containerName: 'quote',
@@ -1433,7 +1284,7 @@ document.addEventListener('DOMContentLoaded', () => {
                   height: 80,
                   borderWidth: 0,
                   borderColor: 0,
-                  borderRdaius: 0,
+                  borderRadius: 0,
                   paddingLength: 0,
                   containerID: 1002,
                   containerName: 'distance',
@@ -1487,15 +1338,16 @@ document.addEventListener('DOMContentLoaded', () => {
     tempSelectedDisplayPosition = null;
   });
 
-  // Settings page navigation
+  // Settings modal
   settingsButton.addEventListener('click', () => {
-    container.style.display = 'none';
     settingsPage.classList.remove('hidden');
   });
 
-  backButton.addEventListener('click', () => {
-    settingsPage.classList.add('hidden');
-    container.style.display = 'flex';
+  // Close settings when clicking overlay background
+  settingsPage.addEventListener('click', (e) => {
+    if (e.target === settingsPage) {
+      settingsPage.classList.add('hidden');
+    }
   });
 
   // Duration button handler - open modal
@@ -1574,13 +1426,13 @@ document.addEventListener('DOMContentLoaded', () => {
       resultsEl.innerHTML = state.navigationHistory.map((result, index) => `
         <div class="result-item" data-index="${index}">
           <svg class="result-item-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M12.75 22.5H11.25V21H12.75V22.5ZM11.25 21H9.75V19.5H11.25V21ZM14.25 21H12.75V19.5H14.25V21ZM9.75 19.5H8.25V18H9.75V19.5ZM15.75 19.5H14.25V18H15.75V19.5ZM8.25 18H6.75V15.75H8.25V18ZM17.25 18H15.75V15.75H17.25V18ZM6.75 15.75H5.25V13.5H6.75V15.75ZM18.75 15.75H17.25V13.5H18.75V15.75ZM5.25 13.5H3.75V6H5.25V13.5ZM14.25 13.5H9.75V12H14.25V13.5ZM20.25 13.5H18.75V6H20.25V13.5ZM9.75 12H8.25V7.5H9.75V12ZM15.75 12H14.25V7.5H15.75V12ZM14.25 7.5H9.75V6H14.25V7.5ZM6.75 6H5.25V4.5H6.75V6ZM18.75 6H17.25V4.5H18.75V6ZM8.25 4.5H6.75V3H8.25V4.5ZM17.25 4.5H15.75V3H17.25V4.5ZM15.75 3H8.25V1.5H15.75V3Z" fill="#232323"/>
+            <path d="M12.75 22.5H11.25V21H12.75V22.5ZM11.25 21H9.75V19.5H11.25V21ZM14.25 21H12.75V19.5H14.25V21ZM9.75 19.5H8.25V18H9.75V19.5ZM15.75 19.5H14.25V18H15.75V19.5ZM8.25 18H6.75V15.75H8.25V18ZM17.25 18H15.75V15.75H17.25V18ZM6.75 15.75H5.25V13.5H6.75V15.75ZM18.75 15.75H17.25V13.5H18.75V15.75ZM5.25 13.5H3.75V6H5.25V13.5ZM14.25 13.5H9.75V12H14.25V13.5ZM20.25 13.5H18.75V6H20.25V13.5ZM9.75 12H8.25V7.5H9.75V12ZM15.75 12H14.25V7.5H15.75V12ZM14.25 7.5H9.75V6H14.25V7.5ZM6.75 6H5.25V4.5H6.75V6ZM18.75 6H17.25V4.5H18.75V6ZM8.25 4.5H6.75V3H8.25V4.5ZM17.25 4.5H15.75V3H17.25V4.5ZM15.75 3H8.25V1.5H15.75V3Z" fill="currentColor"/>
           </svg>
           <div class="result-item-content">
             <div class="result-name">${result.name}</div>
             <div class="result-address">${result.address}</div>
           </div>
-          <img src="/check-icon.svg" class="result-item-check" width="24" height="24">
+          <img src="${BASE}check-icon.svg" class="result-item-check" width="24" height="24">
         </div>
       `).join('');
 
@@ -1653,13 +1505,13 @@ document.addEventListener('DOMContentLoaded', () => {
       resultsEl.innerHTML = results.map((result, index) => `
         <div class="result-item" data-index="${index}">
           <svg class="result-item-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M12.75 22.5H11.25V21H12.75V22.5ZM11.25 21H9.75V19.5H11.25V21ZM14.25 21H12.75V19.5H14.25V21ZM9.75 19.5H8.25V18H9.75V19.5ZM15.75 19.5H14.25V18H15.75V19.5ZM8.25 18H6.75V15.75H8.25V18ZM17.25 18H15.75V15.75H17.25V18ZM6.75 15.75H5.25V13.5H6.75V15.75ZM18.75 15.75H17.25V13.5H18.75V15.75ZM5.25 13.5H3.75V6H5.25V13.5ZM14.25 13.5H9.75V12H14.25V13.5ZM20.25 13.5H18.75V6H20.25V13.5ZM9.75 12H8.25V7.5H9.75V12ZM15.75 12H14.25V7.5H15.75V12ZM14.25 7.5H9.75V6H14.25V7.5ZM6.75 6H5.25V4.5H6.75V6ZM18.75 6H17.25V4.5H18.75V6ZM8.25 4.5H6.75V3H8.25V4.5ZM17.25 4.5H15.75V3H17.25V4.5ZM15.75 3H8.25V1.5H15.75V3Z" fill="#232323"/>
+            <path d="M12.75 22.5H11.25V21H12.75V22.5ZM11.25 21H9.75V19.5H11.25V21ZM14.25 21H12.75V19.5H14.25V21ZM9.75 19.5H8.25V18H9.75V19.5ZM15.75 19.5H14.25V18H15.75V19.5ZM8.25 18H6.75V15.75H8.25V18ZM17.25 18H15.75V15.75H17.25V18ZM6.75 15.75H5.25V13.5H6.75V15.75ZM18.75 15.75H17.25V13.5H18.75V15.75ZM5.25 13.5H3.75V6H5.25V13.5ZM14.25 13.5H9.75V12H14.25V13.5ZM20.25 13.5H18.75V6H20.25V13.5ZM9.75 12H8.25V7.5H9.75V12ZM15.75 12H14.25V7.5H15.75V12ZM14.25 7.5H9.75V6H14.25V7.5ZM6.75 6H5.25V4.5H6.75V6ZM18.75 6H17.25V4.5H18.75V6ZM8.25 4.5H6.75V3H8.25V4.5ZM17.25 4.5H15.75V3H17.25V4.5ZM15.75 3H8.25V1.5H15.75V3Z" fill="currentColor"/>
           </svg>
           <div class="result-item-content">
             <div class="result-name">${result.name}</div>
             <div class="result-address">${result.address}</div>
           </div>
-          <img src="/check-icon.svg" class="result-item-check" width="24" height="24">
+          <img src="${BASE}check-icon.svg" class="result-item-check" width="24" height="24">
         </div>
       `).join('');
 
@@ -1707,4 +1559,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Initialize bridge
   initBridge();
+
+  // Clean up G2 display on page exit
+  window.addEventListener('beforeunload', () => {
+    if (state.bridge && state.isConnected) {
+      state.bridge.shutDownPageContainer(0);
+    }
+  });
 });

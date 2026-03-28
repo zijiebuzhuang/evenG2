@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 MoonWalker is an AR navigation web app for Even Realities G2 smart glasses. It displays minimal navigation information (direction arrow + distance) on the glasses while the user walks to a destination.
 
-**Tech Stack**: Vite + Vanilla JS + Even Hub SDK (@evenrealities/even_hub_sdk@0.0.7)
+**Tech Stack**: Vite + Vanilla JS + Even Hub SDK (@evenrealities/even_hub_sdk)
 
 **Location**: This is part of the evenG2 multi-app monorepo at `/Users/zijiechen/Library/Mobile Documents/com~apple~CloudDocs/AI/even-g2-dev/evenG2/`
 
@@ -17,10 +17,13 @@ MoonWalker is an AR navigation web app for Even Realities G2 smart glasses. It d
 npm run dev
 
 # Build for production
-npm build
+npm run build
 
 # Preview production build
 npm run preview
+
+# Package app for EvenHub Submission (.ehpk format)
+evenhub pack app.json ./dist -o moonwalker.ehpk
 
 # Start official G2 simulator with glow effect
 evenhub-simulator --glow http://localhost:5173
@@ -42,78 +45,41 @@ npm run qr
 
 ## Architecture
 
-### File Structure
-- `index.html` - Main page + Settings page structure
-- `src/main.js` - All application logic (navigation, API calls, G2 bridge, page switching)
-- `src/styles.css` - Complete design system + component styles
-- `src/design-system.js` - Design tokens (colors, typography) for JS usage
-- `public/` - Static assets (SVG icons, fonts, images)
-- `.env` - Environment variables (Amap API key)
+### Single-File Monolith (`src/main.js`)
+All application logic lives in `src/main.js` (~1700 lines), organized directly manipulating the DOM. There are no frameworks, no TypeScript, no linting, and no tests by design.
+- **State**: Single mutable `state` object.
+- **Persistence**: 6 settings saved to `localStorage` (Philosophy quotes, display position, content sources, quote duration, navigation history).
+- **Navigation Loop**: A 2-second update loop calculates bearing via Haversine and sends updates to the G2.
 
-### Key Components
+### G2 Glasses Integration
+The app communicates with the glasses through the **Even Hub SDK bridge**:
+- G2 is a **privacy-first "dumb display"** — no on-board app execution. The web app runs on the phone.
+- **Image handling**: Image updates (`updateImageRawData`) must be **serial**. Concurrent image pushes block the BLE channel.
+- **Containers**: Pages are built from text + image containers with absolute positioning. Max 12 containers per page (up to 8 text + 4 image).
+- **Double-click** on the glasses toggles navigation on/off.
+- **Lifecycle**: `createStartUpPageContainer` must only be called **once** (at startup). All subsequent page changes use `rebuildPageContainer`. Call `shutDownPageContainer(0)` on exit.
 
-**Dual Map Services**:
+### Map Services & Location
 - Amap API for China (requires `VITE_AMAP_KEY` in `.env`)
 - Photon API (OpenStreetMap) for global locations
-- User can switch between services via tabs
+- GPS location + Compass heading (iOS `webkitCompassHeading` / Android `alpha`)
 
-**Navigation System**:
-- Uses browser Geolocation API (falls back to Apple Park coordinates)
-- Calculates bearing and distance using Haversine formula
-- Updates every 2 seconds during navigation
-- Displays 8-direction arrows (↑ ↗ → ↘ ↓ ↙ ← ↖) based on bearing
+## EvenHub Store Submission Requirements
 
-**G2 Display Modes**:
-1. **Welcome Page**: Title + intro text + app icon (70×70 PNG)
-2. **Navigation Page**: Arrow icon (28×28) + distance text + stoic quote
+**CRITICAL: Mandatory Version Requirements for Store Submission**
+Even if newer versions exist, you MUST use exactly these versions for store approval:
+- **SDK** (`@evenrealities/even_hub_sdk`): **v0.0.8**
+- **CLI** (`@evenrealities/evenhub-cli`): **v0.1.10**
+- **Simulator** (`@evenrealities/evenhub-simulator`): **v0.6.0**
 
-**Navigation History**:
-- Stores last 20 destinations in localStorage
-- Displayed when search input is empty
-- Persists across sessions
-
-**Stoic Quotes**:
-- Fetched from https://stoic-quotes.com/api/quote
-- Updates every 10 minutes during navigation
-- Retry logic: attempts every 5 seconds on failure
-
-### G2 SDK Integration
-
-**Bridge Initialization**:
-- Uses `waitForEvenAppBridge()` from SDK
-- Listens for device connection status changes
-- Creates initial page on first connection
-
-**Page Management**:
-- `createStartUpPageContainer()` - Creates initial welcome page
-- `rebuildPageContainer()` - Switches between welcome/navigation modes
-- `textContainerUpgrade()` - Updates text content (distance, quotes)
-- `updateImageRawData()` - Updates images (icons, arrows)
-
-**Container IDs**:
-- Welcome: 1001 (title), 1002 (intro), 1003 (icon)
-- Navigation: 1001 (arrow image), 1002 (distance text), 1003 (quote text)
-
-**Event Handling**:
-- Double-click on glasses toggles navigation on/off
-
-### Design System
-
-**Typography**: FK Grotesk Neue (Light 300, Regular 400)
-- Very Large Title: 24px / 31px / -0.72px / 400
-- Large Title: 20px / 26px / -0.6px / 400
-- Medium Title: 17px / 22px / -0.17px / 400
-- Normal Title: 15px / 19px / -0.15px / 400
-
-**Colors**: CSS variables in `src/styles.css`
-- Text: `--text-first` (#232323), `--text-second` (#7B7B7B), `--text-success` (#4BB956)
-- Backgrounds: `--bg-first` through `--bg-fourth`, `--bg-accent` (#FEF991)
-
-**Grid**: 8px base unit, 48px container padding, 6px border radius
+**Submission Checklist Constraints:**
+1. **App icon**: Must be drawn inside the developer portal on a **2×2 pixel grid** (monochrome).
+2. **Screenshots**: Must be PNG format generated from Simulator v0.6.0.
+3. **App Info**: Description max 2,000 chars. Need privacy/permission declarations generated in the portal.
 
 ## G2 Display Specifications
 
-**Canvas Size**: 520×280 pixels (green Micro-LED)
+**Canvas Size**: 576×288 pixels (4-bit grayscale = 16 levels of green)
 
 **Welcome Page Layout**:
 - Title: x=20, y=20, w=350, h=80
@@ -129,23 +95,13 @@ npm run qr
 - Must be white for G2 display (black icons appear too dark)
 - No background on icon containers (preserve transparency)
 - Canvas size must match container size exactly
-- Convert to PNG base64 before sending to SDK
 
-## Environment Variables
-
-Create `.env` file in project root:
-```
-VITE_AMAP_KEY=bd8561ed37a197fd71fea790560289dc
-```
+## Design System
+- **Typography**: FK Grotesk Neue (Light 300, Regular 400). All letter-spacing values are negative.
+- **Grid**: 8px base unit, 48px container padding, 6px border radius.
+- Detailed specs in `src/design-system.js` and `styles.css`.
 
 ## Knowledge Base
 
 Comprehensive G2 development documentation is available at:
 `/Users/zijiechen/Library/Mobile Documents/com~apple~CloudDocs/AI/even-g2-dev/KNOWLEDGE_BASE.md`
-
-Refer to this for:
-- Complete SDK API reference
-- Container system details
-- Hardware specifications
-- Design guidelines
-- Code templates

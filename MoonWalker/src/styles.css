@@ -117,6 +117,7 @@ body {
 
 /* Configure section */
 .configure-section {
+  margin-top: 12px;
   margin-bottom: 12px;
   flex: 1;
   display: flex;
@@ -155,6 +156,7 @@ body {
   line-height: 19px;
   letter-spacing: -0.15px;
   font-weight: 300;
+  color: var(--text-first);
   background: var(--bg-input);
   outline: none;
   transition: background-color 0.2s;
@@ -163,6 +165,10 @@ body {
 
 .input-box:focus {
   background: var(--bg-input-focus);
+}
+
+.input-box::placeholder {
+  color: var(--text-second);
 }
 
 /* Results list */
@@ -239,10 +245,11 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
+  font-family: var(--font-stack);
 }
 
 .map-tab:hover {
-  background: rgba(255, 255, 255, 0.5);
+  background: var(--map-tab-hover, rgba(0, 0, 0, 0.06));
 }
 
 .map-tab.active {
@@ -271,7 +278,7 @@ body {
 
 .result-item {
   padding: 12px 16px 12px 4px;
-  border-bottom: 1px solid var(--bg-second);
+  border-bottom: 1px solid var(--color-border, var(--bg-second));
   cursor: pointer;
   transition: background 0.2s;
   display: flex;
@@ -446,12 +453,39 @@ body {
   bottom: 0;
   background: var(--bg-third);
   z-index: 100;
+  display: flex;
+  gap: 6px;
+}
+
+/* Settings action button (48×48 square, left of nav button) */
+.action-button.settings-action-btn {
+  flex: none;
+  width: 56px;
+  height: 56px;
+  border: none;
+  border-radius: 6px;
+  background: var(--bg-first);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.2s;
+  padding: 0;
+}
+
+.action-button.settings-action-btn:hover {
+  opacity: 0.8;
+}
+
+.action-button.settings-action-btn:active {
+  opacity: 0.6;
 }
 
 /* Navigation button */
 .nav-button {
-  width: 100%;
-  padding: 16px;
+  flex: 1;
+  height: 56px;
+  padding: 0 16px;
   border: none;
   border-radius: 6px;
   /* Medium Title */
@@ -475,13 +509,13 @@ body {
 }
 
 .nav-button:disabled {
-  background: rgba(0, 0, 0, 0.12);
+  background: var(--nav-button-disabled-bg, rgba(0, 0, 0, 0.12));
   cursor: not-allowed;
 }
 
 .nav-button:disabled svg,
 .nav-button:disabled span {
-  color: var(--text-highlight);
+  color: var(--nav-button-disabled-text, var(--text-second));
 }
 
 .nav-button img {
@@ -524,36 +558,6 @@ body {
   text-align: center;
 }
 
-/* Settings page */
-.settings-page {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: var(--bg-third);
-  z-index: 1000;
-  padding: 0 12px;
-  padding-top: env(safe-area-inset-top);
-  padding-bottom: env(safe-area-inset-bottom);
-  overflow-y: scroll;
-  -ms-overflow-style: none;
-  scrollbar-width: none;
-}
-
-.settings-page::-webkit-scrollbar {
-  display: none;
-}
-
-.settings-page.hidden {
-  display: none;
-}
-
-.settings-page .header .icon-button {
-  position: absolute;
-  left: 0;
-  right: auto;
-}
 
 /* Settings card */
 .settings-card {
@@ -587,9 +591,10 @@ body {
   border: none;
   padding: 0;
   cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  display: inline-block;
+  width: 36px;
+  height: 24px;
+  line-height: 0;
   transition: opacity 0.2s;
 }
 
@@ -656,6 +661,38 @@ body {
 
 .modal-overlay.hidden {
   display: none;
+}
+
+/* Settings Sheet (half-modal, matches VoiceInk) */
+.settings-sheet {
+  background: var(--bg-third);
+  width: 100%;
+  max-width: 600px;
+  height: min(88vh, 720px);
+  border-radius: 6px 6px 0 0;
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.15);
+  padding: 12px;
+  padding-bottom: calc(12px + env(safe-area-inset-bottom));
+  animation: slideUp 0.3s ease-out;
+  display: flex;
+  flex-direction: column;
+}
+
+.settings-sheet .configure-section {
+  margin-bottom: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.sheet-title {
+  font-size: 17px;
+  line-height: 22px;
+  letter-spacing: -0.17px;
+  font-weight: 400;
+  color: var(--text-first);
+  text-align: center;
+  margin-bottom: 8px;
+  flex-shrink: 0;
 }
 
 .modal-content {
@@ -795,14 +832,13 @@ body {
 .content-sources-container {
   background: var(--bg-first);
   border-radius: 6px;
-  overflow: hidden;
 }
 
 .source-option {
   width: 100%;
   background: transparent;
   border: none;
-  border-bottom: 1px solid var(--bg-second);
+  border-bottom: 1px solid var(--color-border, var(--bg-second));
   padding: 16px;
   display: flex;
   align-items: center;
@@ -810,6 +846,7 @@ body {
   cursor: pointer;
   transition: opacity 0.2s;
   text-align: left;
+  font-family: var(--font-stack);
 }
 
 .source-option:last-child {
@@ -874,7 +911,7 @@ body {
 }
 
 .preview-quote-button:disabled {
-  background: rgba(0, 0, 0, 0.12);
+  background: var(--nav-button-disabled-bg, rgba(0, 0, 0, 0.12));
   color: var(--text-second);
   cursor: not-allowed;
 }
@@ -966,50 +1003,86 @@ body {
 
 /* About card */
 .about-card {
-  background: var(--bg-first);
-  padding: 16px;
-  border-radius: 6px;
+  gap: 4px;
 }
 
-.about-card-header {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 12px;
-}
-
-.about-card-icon {
-  border-radius: 8px;
-  flex-shrink: 0;
-}
-
-.about-card-info {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.about-card-name {
+.about-card p {
   font-size: 15px;
-  line-height: 19px;
-  letter-spacing: -0.15px;
+  line-height: 22px;
   font-weight: 400;
   color: var(--text-first);
-}
-
-.about-card-version {
-  font-size: 13px;
-  line-height: 17px;
-  letter-spacing: -0.13px;
-  font-weight: 400;
-  color: var(--text-second);
-}
-
-.about-card-description {
-  font-size: 13px;
-  line-height: 17px;
-  letter-spacing: -0.13px;
-  font-weight: 400;
-  color: var(--text-second);
   margin: 0;
+}
+
+.about-card .hint {
+  font-size: 13px;
+  color: var(--text-second);
+}
+
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    /* Text Colors */
+    --text-highlight: #0c0a07;
+    --text-first: #f0ebe3;
+    --text-second: #8a7f72;
+
+    /* Background Colors */
+    --bg-highlight: #FFFFFF;
+    --bg-first: #2c2620;   /* Lightest surface (Cards, active tabs) */
+    --bg-second: #201c17;  /* Medium surface */
+    --bg-third: #0c0a07;   /* Darkest surface (App background, Modal sheet) */
+    --bg-fourth: #161310;  /* Container backgrounds (Tabs container) */
+    --bg-accent: #FEF991;
+    --bg-input: rgba(255, 255, 255, 0.08);
+    --bg-input-focus: rgba(255, 255, 255, 0.12);
+
+    /* Toggle */
+    --toggle-track-on: #f0ebe3;
+    --toggle-track-off: #3a3228;
+
+    /* Divider */
+    --color-border: #3a3228;
+
+    /* Dark mode overrides for interactive elements */
+    --nav-button-disabled-bg: rgba(255, 255, 255, 0.12);
+    --nav-button-disabled-text: #8a7f72;
+    --map-tab-hover: rgba(255, 255, 255, 0.08);
+  }
+
+  /* Dark icons: invert #232323 SVGs loaded via <img> */
+  .icon-button img,
+  .modal-close img,
+  .settings-card-icon,
+  .about-card-icon,
+  .action-button.settings-action-btn img,
+  .source-check-icon,
+  .settings-value-button img,
+  .result-item-check {
+    filter: invert(1) brightness(0.94);
+  }
+
+  /* Invert check icon in modal selected state */
+  .modal-option.selected::after {
+    filter: invert(1) brightness(0.94);
+  }
+
+  /* Warning card: force dark text on yellow bg */
+  .status-card.warning .status-card-icon,
+  .status-card.warning .status-card-message {
+    color: #232323;
+  }
+
+  .status-card.warning .status-card-retry {
+    color: rgba(35, 35, 35, 0.6);
+  }
+
+  /* Tabs: container matches card bg, active tab uses darker inset */
+  .map-tabs {
+    background: var(--bg-first);
+  }
+
+  .map-tab.active {
+    background: var(--bg-fourth);
+  }
 }

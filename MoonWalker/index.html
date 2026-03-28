@@ -9,14 +9,6 @@
 <body>
   <div class="container">
     <div class="content-wrapper">
-      <!-- Header -->
-      <div class="header">
-      <h1>MoonWalker</h1>
-      <button class="icon-button" id="settingsButton">
-          <img src="/settings.svg" alt="Settings" width="24" height="24">
-        </button>
-      </div>
-
       <!-- Configure Section -->
       <div class="configure-section">
         <h2 class="section-title">Map Service</h2>
@@ -47,9 +39,12 @@
 
       <!-- Navigation Button -->
     <div class="button-container">
+        <button class="action-button settings-action-btn" id="settingsButton">
+          <img src="/settings.svg" alt="Settings" width="24" height="24">
+        </button>
         <button class="nav-button" id="navButton" disabled>
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-       <path d="M13.5 21.75H12V20.25H13.5V21.75ZM15 20.25H13.5V18.75H15V20.25ZM16.5 18.75H15V17.25H16.5V18.75ZM18 17.25H16.5V15.75H18V17.25ZM19.5 15.75H18V14.25H19.5V15.75ZM21 14.25H19.5V12.75H21V14.25ZM19.5 12.75H1.5V11.25H19.5V12.75ZM22.5 11.25V12.75H21V11.25H22.5ZM21 11.25H19.5V9.75H21V11.25ZM19.5 9.75H18V8.25H19.5V9.75ZM18 8.25H16.5V6.75H18V8.25ZM16.5 6.75H15V5.25H16.5V6.75ZM15 5.25H13.5V3.75H15V5.25ZM13.5 3.75H12V2.25H13.5V3.75Z" fill="white"/>
+       <path d="M13.5 21.75H12V20.25H13.5V21.75ZM15 20.25H13.5V18.75H15V20.25ZM16.5 18.75H15V17.25H16.5V18.75ZM18 17.25H16.5V15.75H18V17.25ZM19.5 15.75H18V14.25H19.5V15.75ZM21 14.25H19.5V12.75H21V14.25ZM19.5 12.75H1.5V11.25H19.5V12.75ZM22.5 11.25V12.75H21V11.25H22.5ZM21 11.25H19.5V9.75H21V11.25ZM19.5 9.75H18V8.25H19.5V9.75ZM18 8.25H16.5V6.75H18V8.25ZM16.5 6.75H15V5.25H16.5V6.75ZM15 5.25H13.5V3.75H15V5.25ZM13.5 3.75H12V2.25H13.5V3.75Z" fill="currentColor"/>
        </svg>
           <span>Start Navigation</span>
         </button>
@@ -58,43 +53,21 @@
   </div>
 
   <!-- Settings Page -->
-  <div class="settings-page hidden" id="settingsPage">
-    <div class="content-wrapper">
-      <!-- Settings Header -->
-      <div class="header">
-        <button class="icon-button" id="backButton">
-          <img src="/chevron-back.svg" alt="Back" width="24" height="24">
-        </button>
-        <h1>Settings</h1>
-      </div>
+  <div class="modal-overlay hidden" id="settingsPage">
+    <div class="settings-sheet">
+      <h2 class="sheet-title">Settings</h2>
+      <div class="configure-section">
 
       <!-- Settings Content -->
-      <div class="configure-section">
-        <h2 class="section-title">Location</h2>
-        <div class="settings-card" id="mockLocationToggleCard">
-          <img src="/location.svg" alt="Location" width="24" height="24" class="settings-card-icon">
-          <span class="settings-card-label">Use Mock Location</span>
-          <button class="toggle-switch" id="mockLocationToggle" data-enabled="false">
-            <img src="/toggle-off.svg" alt="Toggle" width="36" height="24">
-          </button>
-        </div>
-        <p class="settings-description">Use a preset location for testing when GPS is unavailable. Select location below.</p>
-
-        <div class="settings-card" id="mockLocationCard" style="display: none;">
-          <img src="/mocklocation.svg" alt="Pin" width="24" height="24" class="settings-card-icon">
-          <span class="settings-card-label">Mock Location</span>
-          <button class="settings-value-button" id="mockLocationButton">
-            <span id="mockLocationValue">Apple Park</span>
-            <img src="/chevron-arrow.svg" alt="Arrow" width="24" height="24">
-          </button>
-        </div>
-
-        <h2 class="section-title" style="margin-top: 24px;">Display</h2>
+        <h2 class="section-title">Display</h2>
         <div class="settings-card" id="philosophyToggleCard">
           <img src="/philosophy.svg" alt="Philosophy" width="24" height="24" class="settings-card-icon">
           <span class="settings-card-label">Show Quotes</span>
           <button class="toggle-switch" id="philosophyToggle" data-enabled="true">
-            <img src="/toggle-on.svg" alt="Toggle" width="36" height="24">
+            <svg width="36" height="24" viewBox="0 0 36 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M30.75 3H33V4.5H34.5V6.75H36V17.25H34.5V19.5H33V21H30.75V22.5H5.25V21H3V19.5H1.5V17.25H0V6.75H1.5V4.5H3V3H5.25V1.5H30.75V3Z" fill="var(--toggle-track-on, #232323)" style="transition: fill 0.2s" />
+              <path d="M29.25 19.5H21.75V18H19.5V15.75H18V8.25H19.5V6H21.75V4.5H29.25V6H31.5V8.25H33V15.75H31.5V18H29.25V19.5Z" fill="white" style="transition: d 0.2s" />
+            </svg>
           </button>
         </div>
         <p class="settings-description">Display inspirational stoic quotes during navigation to keep you mindful on your journey.</p>
@@ -138,45 +111,11 @@
         <p class="settings-description">Select multiple sources to randomly display different content during navigation.</p>
 
         <h2 class="section-title" style="margin-top: 24px;">About</h2>
-        <div class="about-card">
-          <div class="about-card-header">
-            <img src="/moonwalker-icon.png" alt="MoonWalker" width="40" height="40" class="about-card-icon">
-            <div class="about-card-info">
-              <span class="about-card-name">MoonWalker</span>
-              <span class="about-card-version">v1.3.0</span>
-            </div>
-          </div>
-          <p class="about-card-description">A minimal AR navigation app for Even G2 glasses. Walk to your destination with direction and distance displayed right in your view.</p>
+        <div class="main-card about-card">
+          <p>MoonWalker v1.3.0</p>
+          <p class="hint">AR Navigation for Even G2</p>
         </div>
-      </div>
-    </div>
-  </div>
 
-  <!-- Mock Location Picker Modal -->
-  <div class="modal-overlay hidden" id="mockLocationModal">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h3 class="modal-title">Mock Location</h3>
-        <button class="modal-close" id="mockLocationModalCloseButton">
-          <img src="/close-icon.svg" alt="Close" width="24" height="24">
-        </button>
-      </div>
-      <div class="modal-options">
-        <button class="modal-option" data-location="beijing">
-          <span>Beijing</span>
-        </button>
-        <button class="modal-option" data-location="shanghai">
-          <span>Shanghai</span>
-        </button>
-        <button class="modal-option" data-location="shenzhen">
-          <span>Shenzhen</span>
-        </button>
-        <button class="modal-option" data-location="applepark">
-          <span>Apple Park</span>
-        </button>
-      </div>
-      <div class="modal-footer">
-        <button class="modal-confirm-button" id="mockLocationModalConfirmButton">Confirm</button>
       </div>
     </div>
   </div>

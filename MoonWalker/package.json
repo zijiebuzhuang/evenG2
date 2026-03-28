@@ -8,10 +8,12 @@
     "build": "vite build",
     "preview": "vite preview",
     "qr": "evenhub qr",
-    "simulator": "evenhub-simulator http://localhost:5173"
+    "simulator": "evenhub-simulator http://localhost:5173",
+    "walk": "node tools/walk-simulator.mjs"
   },
   "dependencies": {
-    "@evenrealities/even_hub_sdk": "^0.0.7"
+    "@evenrealities/even_hub_sdk": "^0.0.8",
+    "even-toolkit": "^1.1.2"
   },
   "devDependencies": {
     "vite": "^5.0.0"
