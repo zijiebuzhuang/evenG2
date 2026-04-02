@@ -1,0 +1,22 @@
+MoonWalker v1.3.0 - Walk mindfully with zen quotes on your G2
+
+MoonWalker is a minimal AR walking navigation app. Instead of staring at your phone, you get a simple direction arrow and distance on your G2 glasses - just enough to guide you, so you can stay present in the moment.
+
+While you walk, philosophy quotes from Stoicism, Zen Buddhism, and Taoism appear gently on the display.
+
+What's in v1.3.0:
+- Dark mode support
+- Improved SDK lifecycle (clean startup/shutdown)
+- Navigation works without glasses connected (for testing)
+- Walk simulator tool for development
+
+Features:
+- Minimal navigation: direction arrow + distance on G2
+- Zen & philosophy quotes during walks (ZenQuotes API)
+- Dual map support: Amap (China) + OpenStreetMap (global)
+- Search by name or address
+- Double-click glasses to toggle navigation
+- Navigation history for quick access
+- Configurable quote sources and display settings
+
+Now available on EvenHub!

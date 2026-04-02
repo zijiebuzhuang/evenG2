@@ -794,7 +794,7 @@ body {
   content: '';
   width: 24px;
   height: 24px;
-  background-image: url('/check-icon.svg');
+  background-image: url('../public/check-icon.svg');
   background-size: contain;
   background-repeat: no-repeat;
   background-position: center;

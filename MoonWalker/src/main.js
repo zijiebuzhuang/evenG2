@@ -399,7 +399,7 @@ async function initBridge() {
 // Load arrow icon for navigation
 async function loadArrowIcon() {
   try {
-    const response = await fetch('/arrow-icon.svg');
+    const response = await fetch(`${BASE}arrow-icon.svg`);
     if (!response.ok) {
       console.error('Failed to fetch arrow icon:', response.status);
       return null;
