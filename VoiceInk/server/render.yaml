@@ -1,0 +1,16 @@
+services:
+  - type: web
+    runtime: node
+    name: voiceink-server
+    region: singapore
+    plan: free
+    rootDir: VoiceInk/server
+    buildCommand: npm install
+    startCommand: node index.js
+    envVars:
+      - key: WS_PORT
+        value: "10000"
+      - key: NODE_ENV
+        value: production
+      - key: ALLOWED_ORIGINS
+        value: "*"
