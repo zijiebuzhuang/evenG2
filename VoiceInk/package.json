@@ -1,6 +1,6 @@
 {
   "name": "voiceink",
-  "version": "0.4.2",
+  "version": "0.4.3",
   "description": "VoiceInk - 中文语音实时转文字 G2 应用",
   "type": "module",
   "scripts": {
