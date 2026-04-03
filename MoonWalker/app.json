@@ -1,7 +1,7 @@
 {
   "name": "MoonWalker",
   "package_id": "com.moonwalker.nav",
-  "version": "1.3.2",
+  "version": "1.3.3",
   "description": "简洁的漫步导航 - 只显示方向和距离",
   "author": "zijiechen",
   "icon": "icon.png",
@@ -16,7 +16,13 @@
     },
     {
       "name": "network",
-      "desc": "Fetches map data and philosophy quotes."
+      "desc": "Fetches map data and philosophy quotes.",
+      "whitelist": [
+        "https://restapi.amap.com",
+        "https://photon.komoot.io",
+        "https://stoic-quotes.com",
+        "https://v1.hitokoto.cn"
+      ]
     }
   ],
   "supported_languages": ["en", "zh"]
