@@ -2,7 +2,7 @@
   "package_id": "com.zijiechen.voiceink",
   "edition": "202601",
   "name": "VoiceInk",
-  "version": "0.4.4",
+  "version": "0.4.5",
   "min_app_version": "2.0.0",
   "min_sdk_version": "0.0.7",
   "entrypoint": "index.html",
@@ -15,7 +15,8 @@
     },
     {
       "name": "network",
-      "desc": "连接语音识别服务器"
+      "desc": "连接 VoiceInk 语音识别服务器以进行实时转写",
+      "whitelist": ["https://voiceink-server.onrender.com"]
     }
   ],
   "supported_languages": ["zh", "en", "ja", "ko"]
