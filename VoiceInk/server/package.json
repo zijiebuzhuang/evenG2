@@ -1,6 +1,6 @@
 {
   "name": "voiceink-server",
-  "version": "0.4.3",
+  "version": "0.4.4",
   "description": "VoiceInk 后端 - WebSocket + iFlytek/Deepgram ASR",
   "main": "index.js",
   "scripts": {
