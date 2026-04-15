@@ -4,8 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>VoiceInk</title>
-  <script type="module" crossorigin src="/evenG2/assets/index-CnZddsdf.js"></script>
-  <link rel="stylesheet" crossorigin href="/evenG2/assets/index-Cl4_8mH5.css">
+  <script type="module" crossorigin src="/evenG2/assets/index-Cb9HrbpS.js"></script>
+  <link rel="stylesheet" crossorigin href="/evenG2/assets/index-D4fPgXSZ.css">
 </head>
 <body>
   <div class="container">
@@ -130,6 +130,7 @@
             <button class="input-toggle-vis" data-for="iflytekApiKey"><img src="/evenG2/eye-hide.svg" width="16" height="16"></button>
             <button class="input-clear" data-for="iflytekApiKey"><img src="/evenG2/cross.svg" width="16" height="16"></button>
           </div>
+          <button class="save-credentials-btn" id="saveIflytekBtn" disabled>Save</button>
         </div>
         <div class="steps-hint" id="iflytekStepsHint">
           <p>1. Go to <a class="link-text" href="https://console.xfyun.cn" target="_blank" rel="noopener">console.xfyun.cn</a> and sign in</p>
@@ -145,6 +146,7 @@
             <button class="input-toggle-vis" data-for="whisperKeyInput"><img src="/evenG2/eye-hide.svg" width="16" height="16"></button>
             <button class="input-clear" data-for="whisperKeyInput"><img src="/evenG2/cross.svg" width="16" height="16"></button>
           </div>
+          <button class="save-credentials-btn" id="saveDeepgramBtn" disabled>Save</button>
         </div>
         <div class="steps-hint" id="deepgramStepsHint">
           <p>1. Go to <a class="link-text" href="https://console.deepgram.com" target="_blank" rel="noopener">console.deepgram.com</a></p>
@@ -165,7 +167,7 @@
 
         <h2 class="section-title" style="margin-top: 24px;">About</h2>
         <div class="main-card about-card">
-          <p>VoiceInk v0.4.5</p>
+          <p id="aboutVersion"></p>
           <p class="hint">Chinese STT for Even G2</p>
         </div>
       </div>
