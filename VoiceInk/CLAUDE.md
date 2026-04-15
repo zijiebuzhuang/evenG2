@@ -26,7 +26,7 @@ cd server && npm install
 # Run both frontend and server concurrently
 npm run dev
 
-# Run frontend only (Vite dev server on port 5173)
+# Run frontend only (Vite dev server on port 5273)
 npm run dev:frontend
 
 # Run server only (WebSocket server on port 8080)
@@ -34,6 +34,10 @@ npm run dev:server
 
 # Test with G2 simulator
 npm run simulator
+
+# Run simulator smoke test against the automation API
+# Note: this only works when the installed evenhub-simulator binary supports --automation-port.
+npm run test:smoke
 ```
 
 ### Build & Preview
@@ -47,7 +51,7 @@ npm run preview
 
 ### QR Code Generation
 ```bash
-# Generate QR for local dev (http://localhost:5173)
+# Generate QR for local dev (http://localhost:5273)
 npm run qr
 
 # Generate QR for production deployment
@@ -103,6 +107,9 @@ G2 Glasses (mic)
 ### G2 Display Updates
 - Uses `bridge.createStartUpPageContainer()` and `bridge.rebuildPageContainer()`
 - Two display modes: `buildWelcomePage()` (idle) and `buildTranscriptDisplay()` (recording)
+- Root-page double tap must call `bridge.shutDownPageContainer(1)` to show the OS exit dialog; this is an EvenHub review requirement for the idle page
+- Store the unsubscribe returned by `bridge.onEvenHubEvent()` and clear it before rebinding on bridge reconnect; repeated `waitForEvenAppBridge()` success paths can otherwise double-register gesture handlers
+- VoiceInk uses the microphone, so cleanup must always call `bridge.audioControl(false)` on pause, stop, reconnect cleanup, and page unload
 - Auto-clear timer: `scheduleG2AutoClear()` clears display after configurable delay
 - **Configurable line count**: `glassesLineCount` (1–8, default 4) controls how many transcript lines appear on the G2 display
 - **Bilingual mode**: When translation is enabled and source language ≠ native language, display splits lines — foreign text on top (`ceil(total/2)` lines), separator `───`, native translation below (`floor(total/2)` lines)
@@ -206,6 +213,7 @@ This project has no automated tests. Manual testing workflow:
 - **localStorage override**: Set `voiceink_ws_url` to test different backends
 - **Server logs**: Check `server/server.log` for WebSocket events
 - **Browser console**: Frontend logs connection status, G2 events, transcript updates
+- **Simulator automation API**: `npm run test:smoke` expects an evenhub-simulator build that supports `--automation-port`; the current local binary may not expose that flag yet, so the smoke test will fail fast with a clear compatibility error instead of hanging
 
 ### Common Issues
 - **"Not Connected"**: Check WebSocket URL, server running, CORS settings

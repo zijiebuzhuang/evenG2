@@ -1,6 +1,7 @@
 import { waitForEvenAppBridge } from '@evenrealities/even_hub_sdk';
 
 const BASE = import.meta.env.BASE_URL;
+const APP_VERSION = __APP_VERSION__;
 
 // --- i18n ---
 const i18n = {
@@ -28,6 +29,7 @@ const i18n = {
     pause: 'Pause',
     continue: 'Continue',
     noRecordings: 'No recordings',
+    iflytekHint: 'Add your iFlytek APPID and API Key in Settings to get started',
     whisperHint: 'Add your Deepgram API Key in Settings to get started',
     goToSettings: 'Go to Settings',
     clearTitle: 'Clear All Recordings?',
@@ -60,6 +62,10 @@ const i18n = {
     nativeLangKo: '한국어',
     lines: 'lines',
     connecting: 'Connecting…',
+    g2TapToRecord: 'Tap to record',
+    g2DoubleTapHint: 'Double-tap to exit / pause / stop',
+    g2StartupHint: 'Preparing display…',
+    g2WaitingForVoice: 'Waiting for voice...',
   },
   zh: {
     settings: '设置',
@@ -85,6 +91,7 @@ const i18n = {
     pause: '暂停',
     continue: '继续',
     noRecordings: '暂无录音',
+    iflytekHint: '请在设置中添加讯飞 APPID 和 API Key',
     whisperHint: '请在设置中添加 Deepgram API Key',
     goToSettings: '前往设置',
     clearTitle: '清空所有录音？',
@@ -117,6 +124,10 @@ const i18n = {
     nativeLangKo: '한국어',
     lines: '行',
     connecting: '连接中…',
+    g2TapToRecord: '单击开始录音',
+    g2DoubleTapHint: '双击退出 / 暂停 / 结束',
+    g2StartupHint: '正在准备显示…',
+    g2WaitingForVoice: '等待语音输入…',
   },
 };
 
@@ -126,12 +137,11 @@ function t(key) {
 
 // --- WebSocket URL Configuration ---
 function getWebSocketUrl() {
-  // Manual override from localStorage (for debugging)
-  const manualOverride = localStorage.getItem('voiceink_ws_url');
-  if (manualOverride) return manualOverride;
-
-  // Production: use environment variable
+  // Production: use environment variable or explicit override
   if (!import.meta.env.DEV) {
+    const manualOverride = localStorage.getItem('voiceink_ws_url');
+    if (manualOverride) return manualOverride;
+
     const prodUrl = import.meta.env.VITE_WS_URL;
     if (!prodUrl) {
       console.error('VITE_WS_URL not set in production build. WebSocket will not connect.');
@@ -140,12 +150,9 @@ function getWebSocketUrl() {
     return prodUrl;
   }
 
-  // Development: derive from current page or use localhost
-  if (typeof window === 'undefined' || !window.location?.hostname) {
-    return 'ws://localhost:8080';
-  }
-  const devHost = import.meta.env.VITE_DEV_WS_HOST || window.location.hostname;
-  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  // Development: always prefer local dev server unless explicitly overridden by env
+  const devHost = import.meta.env.VITE_DEV_WS_HOST || 'localhost';
+  const protocol = typeof window !== 'undefined' && window.location?.protocol === 'https:' ? 'wss:' : 'ws:';
   const host = devHost.includes(':') ? `[${devHost}]` : devHost;
   return `${protocol}//${host}:8080`;
 }
@@ -155,6 +162,7 @@ let currentLang = localStorage.getItem('voiceink_language') || 'en';
 // --- State ---
 let bridge = null;
 let bridgeReady = false;
+let unsubscribeEvenHubEvent = null;
 let glassesAudioSeen = false;
 let activeAudioSource = 'none';
 let ws = null;
@@ -210,6 +218,7 @@ const historySection = document.getElementById('historySection');
 const historyList = document.getElementById('historyList');
 const detailPage = document.getElementById('detailPage');
 const detailTitle = document.getElementById('detailTitle');
+const aboutVersion = document.getElementById('aboutVersion');
 const detailTranscriptList = document.getElementById('detailTranscriptList');
 const buttonContainer = document.getElementById('buttonContainer');
 const whisperKeyInput = document.getElementById('whisperKeyInput');
@@ -292,6 +301,23 @@ document.querySelectorAll('.input-clear').forEach(btn => {
   });
 });
 
+Object.entries(inputKeyMap).forEach(([inputId, storageKey]) => {
+  const input = document.getElementById(inputId);
+  if (!input) {
+    console.warn(`Input element not found: ${inputId}`);
+    return;
+  }
+  input.addEventListener('input', () => {
+    const trimmed = input.value.trim();
+    localStorage.setItem(storageKey, trimmed);
+    console.log(`Saved ${storageKey}:`, trimmed ? '[value]' : '[empty]');
+  });
+  input.addEventListener('change', () => {
+    const trimmed = input.value.trim();
+    localStorage.setItem(storageKey, trimmed);
+  });
+});
+
 // Password visibility toggle
 document.querySelectorAll('.input-toggle-vis').forEach(btn => {
   btn.addEventListener('click', () => {
@@ -309,8 +335,13 @@ glassesDisplayToggle.addEventListener('click', () => {
   updateDisplaySettingsUI();
   if (!glassesDisplayOn) {
     clearG2AutoClearTimer();
-  } else if (recordingState === 'recording') {
-    scheduleG2AutoClear();
+    clearG2StartupHintTimer();
+    g2ShowingStartupHint = false;
+  } else {
+    if (recordingState === 'recording') {
+      scheduleG2AutoClear();
+    }
+    void updateG2Display();
   }
 });
 
@@ -414,6 +445,7 @@ function applyLanguage() {
   document.querySelector('#nativeLanguageCard .settings-card-label').textContent = t('nativeLanguage');
   document.querySelector('#languageCard .settings-card-label').textContent = t('language');
   document.querySelector('#clearHistoryBtn .settings-card-label').textContent = t('clearAllRecordings');
+  aboutVersion.textContent = `VoiceInk v${APP_VERSION}`;
   document.querySelector('.about-card .hint').textContent = t('aboutDesc');
 
   // Tabs
@@ -612,29 +644,31 @@ nativeLanguageConfirmBtn.addEventListener('click', () => {
 // --- Page Navigation ---
 function closeSettings() {
   settingsPage.classList.add('hidden');
-  const newKey = whisperKeyInput.value.trim();
-  const oldKey = localStorage.getItem('voiceink_deepgram_key') || '';
-  if (newKey !== oldKey) {
-    localStorage.setItem('voiceink_deepgram_key', newKey);
-    if (activeEngine === 'whisper' && recordingState === 'stopped') renderHistory();
-  }
-  localStorage.setItem('voiceink_iflytek_appid', iflytekAppId.value.trim());
-  localStorage.setItem('voiceink_iflytek_apikey', iflytekApiKey.value.trim());
-  localStorage.setItem('voiceink_iflytek_apisecret', iflytekApiSecret.value.trim());
   localStorage.setItem('voiceink_glasses_display', glassesDisplayOn ? 'on' : 'off');
   localStorage.setItem('voiceink_glasses_autoclear', glassesAutoClearMs);
   localStorage.setItem('voiceink_glasses_line_count', String(glassesLineCount));
   localStorage.setItem('voiceink_translation_enabled', translationEnabled ? 'on' : 'off');
   localStorage.setItem('voiceink_native_language', nativeLanguage);
+  if (recordingState === 'stopped') renderHistory();
   updateButtons();
 }
 
 function openSettings() {
   settingsPage.classList.remove('hidden');
-  whisperKeyInput.value = localStorage.getItem('voiceink_deepgram_key') || '';
-  iflytekAppId.value = localStorage.getItem('voiceink_iflytek_appid') || '';
-  iflytekApiKey.value = localStorage.getItem('voiceink_iflytek_apikey') || '';
-  iflytekApiSecret.value = localStorage.getItem('voiceink_iflytek_apisecret') || '';
+  const deepgramKey = localStorage.getItem('voiceink_deepgram_key') || '';
+  const appId = localStorage.getItem('voiceink_iflytek_appid') || '';
+  const apiKey = localStorage.getItem('voiceink_iflytek_apikey') || '';
+  const apiSecret = localStorage.getItem('voiceink_iflytek_apisecret') || '';
+  console.log('Opening settings, loaded keys:', {
+    deepgram: deepgramKey ? '[value]' : '[empty]',
+    appId: appId ? '[value]' : '[empty]',
+    apiKey: apiKey ? '[value]' : '[empty]',
+    apiSecret: apiSecret ? '[value]' : '[empty]',
+  });
+  whisperKeyInput.value = deepgramKey;
+  iflytekAppId.value = appId;
+  iflytekApiKey.value = apiKey;
+  iflytekApiSecret.value = apiSecret;
   updateTogglesUI();
   updateDisplaySettingsUI();
 }
@@ -718,7 +752,7 @@ function renderHistory() {
     historyDateTabs.style.display = 'none';
     container.classList.add('empty');
     if (activeEngine === 'whisper') {
-      const hasKey = !!localStorage.getItem('voiceink_deepgram_key');
+      const hasKey = serverHasCredentials || !!localStorage.getItem('voiceink_deepgram_key');
       historyList.innerHTML = `
         <div class="empty-state">
           <img src="${BASE}nohistory.svg" width="32" height="32">
@@ -729,11 +763,16 @@ function renderHistory() {
       const btn = document.getElementById('emptySettingsBtn');
       if (btn) btn.addEventListener('click', () => openSettings());
     } else {
+      const hasIflytekKey = serverHasCredentials || !!(localStorage.getItem('voiceink_iflytek_appid') && localStorage.getItem('voiceink_iflytek_apikey'));
       historyList.innerHTML = `
         <div class="empty-state">
           <img src="${BASE}nohistory.svg" width="32" height="32">
           <p>${t('noRecordings')}</p>
+          ${hasIflytekKey ? '' : `<p class="empty-hint">${t('iflytekHint')}</p>`}
+          ${hasIflytekKey ? '' : `<button class="empty-settings-btn" id="emptySettingsBtn">${t('goToSettings')}</button>`}
         </div>`;
+      const btn = document.getElementById('emptySettingsBtn');
+      if (btn) btn.addEventListener('click', () => openSettings());
     }
     return;
   }
@@ -858,7 +897,7 @@ function connectWebSocket() {
       if (item) {
         item.translationText = msg.text || '';
         item.translationStatus = 'done';
-        updateG2Display();
+        void updateG2Display();
       }
     }
   };
@@ -1101,23 +1140,49 @@ recordingCard.querySelector('.recording-card-top').addEventListener('click', () 
   // Retry bridge
   if (!bridgeReady) {
     waitForEvenAppBridge().then(async (b) => {
+      cleanupBridgeState();
       bridge = b;
       bridgeReady = true;
+      g2Initialized = false;
       console.log('G2 bridge reconnected');
       updateConnectionStatus();
-      bridge.onEvenHubEvent(handleG2Event);
-      if (!g2Initialized) {
-        try {
-          const result = await bridge.createStartUpPageContainer(buildWelcomePage());
-          if (result === 0) g2Initialized = true;
-        } catch (e) { console.log('Create page failed on retry:', e); }
-      }
+      bindBridgeEvents();
+      showG2StartupHint();
+      try {
+        const ready = await ensureG2PageInitialized(true);
+        if (ready) scheduleG2StartupHintDismiss();
+      } catch (e) { console.log('Create page failed on retry:', e); }
     }).catch(e => {
       console.log('G2 bridge retry failed:', e);
       updateConnectionStatus();
     });
   }
 });
+
+function bindBridgeEvents() {
+  if (!bridge) return;
+  if (unsubscribeEvenHubEvent) {
+    unsubscribeEvenHubEvent();
+    unsubscribeEvenHubEvent = null;
+  }
+  unsubscribeEvenHubEvent = bridge.onEvenHubEvent(handleG2Event);
+}
+
+function cleanupBridgeState() {
+  clearG2AutoClearTimer();
+  clearG2StartupHintTimer();
+  g2ShowingStartupHint = false;
+  activeAudioSource = 'none';
+  try {
+    bridge?.audioControl?.(false);
+  } catch (e) {
+    console.error('Failed to disable bridge audio:', e);
+  }
+  if (unsubscribeEvenHubEvent) {
+    unsubscribeEvenHubEvent();
+    unsubscribeEvenHubEvent = null;
+  }
+}
 
 function hasCredentials() {
   // Server-managed credentials available — always allow
@@ -1263,7 +1328,7 @@ async function startRecording() {
   startDurationTimer();
   updateTabs();
 
-  updateG2Display();
+  void updateG2Display();
 }
 
 function pauseRecording() {
@@ -1286,7 +1351,7 @@ function pauseRecording() {
   updateDurationDot();
   updateButtons();
   updateRecordingCardUI();
-  updateG2Display();
+  void updateG2Display();
 }
 
 async function resumeRecording() {
@@ -1301,7 +1366,7 @@ async function resumeRecording() {
     updateRecordingCardUI();
     updateConnectionStatus();
     updateTabs();
-    updateG2Display();
+    void updateG2Display();
     return;
   }
 
@@ -1334,7 +1399,7 @@ async function resumeRecording() {
   updateRecordingCardUI();
   startDurationTimer();
 
-  updateG2Display();
+  void updateG2Display();
 }
 
 function stopRecording() {
@@ -1366,7 +1431,7 @@ function stopRecording() {
   updateRecordingCardUI();
   updateConnectionStatus();
   updateTabs();
-  updateG2Display();
+  void updateG2Display();
 }
 
 function getPcmBytes(pcm) {
@@ -1598,7 +1663,7 @@ function addTranscript(text) {
     lastTranscriptTime = now;
     updateRecordingTitle();
     renderTranscripts();
-    updateG2Display();
+    void updateG2Display();
     return;
   }
 
@@ -1649,7 +1714,7 @@ function addTranscript(text) {
   lastTranscriptTime = now;
   updateRecordingTitle();
   renderTranscripts();
-  updateG2Display();
+  void updateG2Display();
 }
 
 function clearTranscripts() {
@@ -1658,7 +1723,7 @@ function clearTranscripts() {
   if (partial) partial.remove();
   updateRecordingTitle();
   renderTranscripts();
-  updateG2Display();
+  void updateG2Display();
 }
 
 function updatePartialTranscript(text) {
@@ -1679,7 +1744,7 @@ function updatePartialTranscript(text) {
   }
   partial.querySelector('.transcript-text').textContent = text;
   transcriptContainer.scrollTop = transcriptContainer.scrollHeight;
-  updateG2Display();
+  void updateG2Display();
 }
 
 function renderTranscripts() {
@@ -1707,24 +1772,57 @@ function renderTranscripts() {
 }
 
 // --- G2 Display ---
-function buildWelcomePage() {
+let g2Initialized = false;
+let g2StartupHintTimer = null;
+let g2ShowingStartupHint = false;
+
+function buildWelcomePage({ showStartupHint = false } = {}) {
+  const hint = showStartupHint ? t('g2StartupHint') : t('g2TapToRecord');
   return {
     containerTotalNum: 1,
     textObject: [{
       xPosition: 20, yPosition: 20, width: 536, height: 248,
       containerID: 1001, containerName: 'welcome',
-      content: 'VoiceInk\n\nTap to record\nDouble-tap to pause / stop',
+      content: `VoiceInk\n\n${hint}\n${t('g2DoubleTapHint')}`,
       isEventCapture: 1,
-      borderWidth: 0, borderColor: 0, borderRdaius: 0, paddingLength: 12,
+      borderWidth: 0, borderColor: 0, borderRadius: 0, paddingLength: 12,
     }]
   };
+}
+
+function clearG2StartupHintTimer() {
+  if (g2StartupHintTimer) {
+    clearTimeout(g2StartupHintTimer);
+    g2StartupHintTimer = null;
+  }
+}
+
+function scheduleG2StartupHintDismiss() {
+  clearG2StartupHintTimer();
+  g2StartupHintTimer = setTimeout(async () => {
+    g2StartupHintTimer = null;
+    if (!bridge || !g2Initialized || recordingState !== 'stopped' || !glassesDisplayOn) return;
+    if (!g2ShowingStartupHint) return;
+    g2ShowingStartupHint = false;
+    try {
+      await bridge.rebuildPageContainer(buildWelcomePage());
+    } catch (e) {
+      console.error('G2 startup hint error:', e);
+    }
+  }, 1200);
+}
+
+function showG2StartupHint() {
+  if (!glassesDisplayOn) return;
+  g2ShowingStartupHint = true;
+  scheduleG2StartupHintDismiss();
 }
 
 function buildTranscriptDisplay(isCleared = false) {
   const partialText = document.getElementById('partialTranscript')?.querySelector('.transcript-text')?.textContent?.trim() || '';
 
   if (isCleared) {
-    return buildG2Container('Waiting for voice...');
+    return buildG2Container(t('g2WaitingForVoice'));
   }
 
   const maxLines = glassesLineCount;
@@ -1754,7 +1852,7 @@ function buildTranscriptDisplay(isCleared = false) {
       if (parts.length > 0) parts.push('───');
       parts.push(nativeBody);
     }
-    const body = parts.length > 0 ? parts.join('\n') : 'Waiting for voice...';
+    const body = parts.length > 0 ? parts.join('\n') : t('g2WaitingForVoice');
     return buildG2Container(body);
   }
 
@@ -1762,7 +1860,7 @@ function buildTranscriptDisplay(isCleared = false) {
   const texts = transcripts.map(item => item.text.trim()).filter(Boolean);
   if (partialText) texts.push(partialText);
   const flow = joinTextsForDisplay(texts);
-  const body = flow ? tailTextForG2(flow, maxLines) : 'Waiting for voice...';
+  const body = flow ? tailTextForG2(flow, maxLines) : t('g2WaitingForVoice');
   return buildG2Container(body);
 }
 
@@ -1774,30 +1872,54 @@ function buildG2Container(content) {
       containerID: 1001, containerName: 'transcript',
       content,
       isEventCapture: 1,
-      borderWidth: 0, borderColor: 0, borderRdaius: 0, paddingLength: 12,
+      borderWidth: 0, borderColor: 0, borderRadius: 0, paddingLength: 12,
     }]
   };
 }
 
-let g2Initialized = false;
+async function ensureG2PageInitialized(showStartupHint = false) {
+  if (!bridge || !glassesDisplayOn) return false;
+  if (g2Initialized) return true;
+
+  const result = await bridge.createStartUpPageContainer(buildWelcomePage({ showStartupHint }));
+  if (result === 0) {
+    g2Initialized = true;
+    return true;
+  }
+
+  console.log('createStartUpPageContainer returned:', result);
+  return false;
+}
 
 async function updateG2Display(isCleared = false) {
   if (!bridge) return;
-  if (!glassesDisplayOn) return;
+  if (!glassesDisplayOn) {
+    clearG2AutoClearTimer();
+    clearG2StartupHintTimer();
+    g2ShowingStartupHint = false;
+    return;
+  }
 
   try {
-    if (!g2Initialized) {
-      await bridge.createStartUpPageContainer(buildWelcomePage());
-      g2Initialized = true;
-    } else if (recordingState === 'stopped') {
+    if (recordingState === 'stopped') {
       clearG2AutoClearTimer();
+      if (g2ShowingStartupHint) showG2StartupHint();
+      const ready = await ensureG2PageInitialized(g2ShowingStartupHint);
+      if (!ready) return;
       console.log('[G2] Stopped → rebuilding welcome page');
-      await bridge.rebuildPageContainer(buildWelcomePage());
-    } else {
-      await bridge.rebuildPageContainer(buildTranscriptDisplay(isCleared));
-      if (!isCleared) scheduleG2AutoClear();
+      await bridge.rebuildPageContainer(buildWelcomePage({ showStartupHint: g2ShowingStartupHint }));
+      if (g2ShowingStartupHint) scheduleG2StartupHintDismiss();
+      return;
     }
+
+    clearG2StartupHintTimer();
+    g2ShowingStartupHint = false;
+    const ready = await ensureG2PageInitialized();
+    if (!ready) return;
+    await bridge.rebuildPageContainer(buildTranscriptDisplay(isCleared));
+    if (!isCleared) scheduleG2AutoClear();
   } catch (e) {
+    g2Initialized = false;
     console.error('G2 display error:', e);
   }
 }
@@ -1829,10 +1951,17 @@ function handleG2Event(event) {
     if (recordingState === 'stopped') startRecording();
     else if (recordingState === 'paused') resumeRecording();
   }
-  // 双击：暂停 / 结束
+  // 双击：根页面弹退出确认；录音中暂停；暂停时结束
   if (isDoubleClick) {
-    if (recordingState === 'recording') pauseRecording();
-    else if (recordingState === 'paused') stopRecording();
+    if (recordingState === 'stopped') {
+      bridge?.shutDownPageContainer?.(1).catch((e) => {
+        console.error('Failed to show exit dialog:', e);
+      });
+    } else if (recordingState === 'recording') {
+      pauseRecording();
+    } else if (recordingState === 'paused') {
+      stopRecording();
+    }
   }
 }
 
@@ -1866,32 +1995,41 @@ tabWhisper.addEventListener('click', () => {
 
 // --- Init ---
 // WebSocket 和 G2 bridge 并行初始化，互不阻塞
-applyLanguage();
+try {
+  applyLanguage();
+} catch (e) {
+  console.error('Initial applyLanguage failed:', e);
+}
 updateTogglesUI();
 updateDurationDot();
 updateRecordingCardUI();
 updateSections();
+updateButtons();
+updateConnectionStatus();
 connectWebSocket();
 
 waitForEvenAppBridge().then(async (b) => {
+  cleanupBridgeState();
   bridge = b;
   bridgeReady = true;
   console.log('G2 bridge initialized');
   updateConnectionStatus();
-  bridge.onEvenHubEvent(handleG2Event);
+  bindBridgeEvents();
+  showG2StartupHint();
 
   // 尝试创建页面，失败则延迟重试
   async function tryCreatePage(retries) {
     try {
-      const result = await bridge.createStartUpPageContainer(buildWelcomePage());
-      console.log('createStartUpPageContainer result:', result);
-      if (result === 0) {
-        g2Initialized = true;
+      const ready = await ensureG2PageInitialized(true);
+      console.log('createStartUpPageContainer result:', ready ? 0 : 'retry');
+      if (ready) {
+        scheduleG2StartupHintDismiss();
         console.log('G2 page created');
       } else if (retries > 0) {
         setTimeout(() => tryCreatePage(retries - 1), 1000);
       }
     } catch (e) {
+      g2Initialized = false;
       console.log('Create page failed, retrying...', e);
       if (retries > 0) setTimeout(() => tryCreatePage(retries - 1), 1000);
     }
@@ -1902,4 +2040,8 @@ waitForEvenAppBridge().then(async (b) => {
   bridgeReady = false;
   console.log('G2 bridge not available:', e);
   updateConnectionStatus();
+});
+
+window.addEventListener('beforeunload', () => {
+  cleanupBridgeState();
 });

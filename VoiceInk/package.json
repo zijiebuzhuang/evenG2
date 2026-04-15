@@ -1,6 +1,6 @@
 {
   "name": "voiceink",
-  "version": "0.4.5",
+  "version": "0.4.8",
   "description": "VoiceInk - 中文语音实时转文字 G2 应用",
   "type": "module",
   "scripts": {
@@ -14,7 +14,8 @@
     "deploy": "npm run deploy:frontend",
     "qr": "evenhub qr",
     "qr:prod": "evenhub qr -u ${VOICEINK_APP_URL:-https://voiceink.example.com}",
-    "simulator": "evenhub-simulator --glow http://localhost:5173"
+    "simulator": "evenhub-simulator --glow http://localhost:5273",
+    "test:smoke": "node scripts/simulator-smoke.mjs"
   },
   "dependencies": {
     "@evenrealities/even_hub_sdk": "^0.0.9",
