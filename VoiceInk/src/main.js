@@ -1936,9 +1936,34 @@ async function ensureG2PageInitialized(showStartupHint = false) {
   return false;
 }
 
-async function updateG2Display(isCleared = false) {
-  if (!bridge) return;
+let g2UpdatePending = false;
+let g2LastUpdateIsCleared = false;
+let g2UpdateTimeout = null;
+
+function updateG2Display(isCleared = false) {
+  g2LastUpdateIsCleared = isCleared;
+  
+  if (g2UpdatePending) return;
+  g2UpdatePending = true;
+  
+  // Throttle updates to max 150ms per frame to avoid choking the Bluetooth bridge
+  if (g2UpdateTimeout) clearTimeout(g2UpdateTimeout);
+  g2UpdateTimeout = setTimeout(async () => {
+    try {
+      await _doUpdateG2Display(g2LastUpdateIsCleared);
+    } finally {
+      g2UpdatePending = false;
+    }
+  }, 150);
+}
+
+async function _doUpdateG2Display(isCleared = false) {
+  if (!bridge) {
+    console.log('[G2 Debug] updateG2Display skipped: bridge is null');
+    return;
+  }
   if (!glassesDisplayOn) {
+    console.log('[G2 Debug] updateG2Display skipped: glassesDisplayOn is false');
     clearG2AutoClearTimer();
     clearG2StartupHintTimer();
     g2ShowingStartupHint = false;
@@ -1950,7 +1975,10 @@ async function updateG2Display(isCleared = false) {
       clearG2AutoClearTimer();
       if (g2ShowingStartupHint) showG2StartupHint();
       const ready = await ensureG2PageInitialized(g2ShowingStartupHint);
-      if (!ready) return;
+      if (!ready) {
+        console.log('[G2 Debug] updateG2Display skipped (stopped): ensureG2PageInitialized returned false');
+        return;
+      }
       console.log('[G2] Stopped → rebuilding welcome page');
       await bridge.rebuildPageContainer(buildWelcomePage({ showStartupHint: g2ShowingStartupHint }));
       if (g2ShowingStartupHint) scheduleG2StartupHintDismiss();
@@ -1960,12 +1988,21 @@ async function updateG2Display(isCleared = false) {
     clearG2StartupHintTimer();
     g2ShowingStartupHint = false;
     const ready = await ensureG2PageInitialized();
-    if (!ready) return;
-    await bridge.rebuildPageContainer(buildTranscriptDisplay(isCleared));
+    if (!ready) {
+      console.log('[G2 Debug] updateG2Display skipped (recording): ensureG2PageInitialized returned false');
+      return;
+    }
+    
+    // Skip sending empty page if we're not actually cleared
+    const displayData = buildTranscriptDisplay(isCleared);
+    console.log('[G2 Debug] Calling rebuildPageContainer with displayData:', JSON.stringify(displayData.textObject[0].content));
+    await bridge.rebuildPageContainer(displayData);
+    console.log('[G2 Debug] rebuildPageContainer success');
+    
     if (!isCleared) scheduleG2AutoClear();
   } catch (e) {
     g2Initialized = false;
-    console.error('G2 display error:', e);
+    console.error('[G2 Debug] G2 display error:', e);
   }
 }
 
