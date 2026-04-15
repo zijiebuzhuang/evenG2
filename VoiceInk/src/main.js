@@ -1155,7 +1155,7 @@ function updateConnectionStatus() {
   // If fully ready, the title says "Glasses Connected", so we don't need a subtitle saying the same thing.
   // We only show a subtitle if we are partially ready (e.g. bridge is ready but WS is not).
   if (fullyReady) {
-    recordingStartTimeEl.textContent = '';
+    recordingStartTimeEl.textContent = t('bridgeReady');
   } else {
     recordingStartTimeEl.textContent = (bridgeReady && glassesAudioSeen) ? t('glassesConnected') : bridgeReady ? t('bridgeReady') : '';
   }

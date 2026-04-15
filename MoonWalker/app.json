@@ -1,7 +1,7 @@
 {
   "name": "MoonWalker",
   "package_id": "com.moonwalker.nav",
-  "version": "1.3.3",
+  "version": "1.3.4",
   "description": "简洁的漫步导航 - 只显示方向和距离",
   "author": "zijiechen",
   "icon": "icon.png",

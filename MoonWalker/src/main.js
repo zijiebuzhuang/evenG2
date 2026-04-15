@@ -2,6 +2,7 @@ import { waitForEvenAppBridge, ImageContainerProperty, RebuildPageContainer } fr
 
 // Amap API Key (from environment variable)
 const AMAP_KEY = import.meta.env.VITE_AMAP_KEY;
+const APP_VERSION = __APP_VERSION__;
 
 // Base URL for assets (handles sub-path deployment)
 const BASE = import.meta.env.BASE_URL;
@@ -92,7 +93,7 @@ function createWelcomeTextObjects() {
       containerID: 1002,
       containerName: 'intro',
       isEventCapture: 1,
-      content: 'Per Aspera ad Astra.'
+      content: 'Pending destination,\ncontinue on phone'
     }
   ];
 }
@@ -1028,6 +1029,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const settingsButton = document.getElementById('settingsButton');
   const settingsPage = document.getElementById('settingsPage');
   const container = document.querySelector('.container');
+  const aboutVersion = document.getElementById('aboutVersion');
   const philosophyToggle = document.getElementById('philosophyToggle');
   const durationButton = document.getElementById('durationButton');
   const durationValue = document.getElementById('durationValue');
@@ -1046,6 +1048,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const displayPositionModalOptions = document.querySelectorAll('#displayPositionModal .modal-option');
   const displayPositionModalCloseButton = document.getElementById('displayPositionModalCloseButton');
   const displayPositionModalConfirmButton = document.getElementById('displayPositionModalConfirmButton');
+
+  aboutVersion.textContent = `MoonWalker v${APP_VERSION}`;
 
   let searchTimeout;
   let tempSelectedDuration = null; // Temporary selection before confirmation

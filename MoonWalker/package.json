@@ -1,6 +1,6 @@
 {
   "name": "moonwalker",
-  "version": "1.3.3",
+  "version": "1.3.4",
   "description": "MoonWalker - 简洁的 AR 漫步导航应用",
   "type": "module",
   "scripts": {
