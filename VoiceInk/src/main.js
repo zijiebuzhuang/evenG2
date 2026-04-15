@@ -293,7 +293,7 @@ const inputKeyMap = {
 
 function updateSaveButtons() {
   if (saveIflytekBtn) {
-    const hasIflytek = iflytekAppId.value.trim() && iflytekApiKey.value.trim();
+    const hasIflytek = iflytekAppId.value.trim() && iflytekApiKey.value.trim() && iflytekApiSecret.value.trim();
     saveIflytekBtn.disabled = !hasIflytek;
   }
   if (saveDeepgramBtn) {
@@ -347,6 +347,9 @@ Object.entries(inputKeyMap).forEach(([inputId, storageKey]) => {
     updateSaveButtons();
   });
   input.addEventListener('change', () => {
+    updateSaveButtons();
+  });
+  input.addEventListener('keyup', () => {
     updateSaveButtons();
   });
 });
@@ -1148,7 +1151,15 @@ function updateConnectionStatus() {
   connectionDot.classList.remove('connecting');
   connectionDot.classList.toggle('connected', fullyReady);
   recordingTitleText.textContent = fullyReady ? t('ready') : t('notConnected');
-  recordingStartTimeEl.textContent = (bridgeReady && glassesAudioSeen) ? t('glassesConnected') : bridgeReady ? t('bridgeReady') : '';
+
+  // If fully ready, the title says "Glasses Connected", so we don't need a subtitle saying the same thing.
+  // We only show a subtitle if we are partially ready (e.g. bridge is ready but WS is not).
+  if (fullyReady) {
+    recordingStartTimeEl.textContent = '';
+  } else {
+    recordingStartTimeEl.textContent = (bridgeReady && glassesAudioSeen) ? t('glassesConnected') : bridgeReady ? t('bridgeReady') : '';
+  }
+
   durationText.textContent = '';
   updateRecordingCardUI();
 }
