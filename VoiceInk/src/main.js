@@ -224,6 +224,8 @@ const buttonContainer = document.getElementById('buttonContainer');
 const whisperKeyInput = document.getElementById('whisperKeyInput');
 const tabBaidu = document.getElementById('tabBaidu');
 const tabWhisper = document.getElementById('tabWhisper');
+const saveIflytekBtn = document.getElementById('saveIflytekBtn');
+const saveDeepgramBtn = document.getElementById('saveDeepgramBtn');
 const iflytekAppId = document.getElementById('iflytekAppId');
 const iflytekApiKey = document.getElementById('iflytekApiKey');
 const iflytekApiSecret = document.getElementById('iflytekApiSecret');
@@ -289,6 +291,39 @@ const inputKeyMap = {
   whisperKeyInput: 'voiceink_deepgram_key',
 };
 
+function updateSaveButtons() {
+  if (saveIflytekBtn) {
+    const hasIflytek = iflytekAppId.value.trim() && iflytekApiKey.value.trim();
+    saveIflytekBtn.disabled = !hasIflytek;
+  }
+  if (saveDeepgramBtn) {
+    const hasDeepgram = whisperKeyInput.value.trim();
+    saveDeepgramBtn.disabled = !hasDeepgram;
+  }
+}
+
+if (saveIflytekBtn) {
+  saveIflytekBtn.addEventListener('click', () => {
+    localStorage.setItem('voiceink_iflytek_appid', iflytekAppId.value.trim());
+    localStorage.setItem('voiceink_iflytek_apikey', iflytekApiKey.value.trim());
+    localStorage.setItem('voiceink_iflytek_apisecret', iflytekApiSecret.value.trim());
+    saveIflytekBtn.textContent = 'Saved';
+    setTimeout(() => { saveIflytekBtn.textContent = 'Save'; }, 2000);
+    if (activeEngine === 'iflytek' && recordingState === 'stopped') renderHistory();
+    updateButtons();
+  });
+}
+
+if (saveDeepgramBtn) {
+  saveDeepgramBtn.addEventListener('click', () => {
+    localStorage.setItem('voiceink_deepgram_key', whisperKeyInput.value.trim());
+    saveDeepgramBtn.textContent = 'Saved';
+    setTimeout(() => { saveDeepgramBtn.textContent = 'Save'; }, 2000);
+    if (activeEngine === 'whisper' && recordingState === 'stopped') renderHistory();
+    updateButtons();
+  });
+}
+
 document.querySelectorAll('.input-clear').forEach(btn => {
   btn.addEventListener('click', () => {
     const inputId = btn.dataset.for;
@@ -297,6 +332,7 @@ document.querySelectorAll('.input-clear').forEach(btn => {
       input.value = '';
       const storageKey = inputKeyMap[inputId];
       if (storageKey) localStorage.removeItem(storageKey);
+      updateSaveButtons();
     }
   });
 });
@@ -308,13 +344,10 @@ Object.entries(inputKeyMap).forEach(([inputId, storageKey]) => {
     return;
   }
   input.addEventListener('input', () => {
-    const trimmed = input.value.trim();
-    localStorage.setItem(storageKey, trimmed);
-    console.log(`Saved ${storageKey}:`, trimmed ? '[value]' : '[empty]');
+    updateSaveButtons();
   });
   input.addEventListener('change', () => {
-    const trimmed = input.value.trim();
-    localStorage.setItem(storageKey, trimmed);
+    updateSaveButtons();
   });
 });
 
@@ -669,6 +702,7 @@ function openSettings() {
   iflytekAppId.value = appId;
   iflytekApiKey.value = apiKey;
   iflytekApiSecret.value = apiSecret;
+  updateSaveButtons();
   updateTogglesUI();
   updateDisplaySettingsUI();
 }
