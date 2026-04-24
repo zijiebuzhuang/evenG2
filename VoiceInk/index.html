@@ -113,28 +113,52 @@
         </div>
 
         <h2 class="section-title" style="margin-top: 24px;">Chinese ASR</h2>
-        <div class="main-card" id="iflytekCard">
-          <p class="card-label">iFlytek ASR</p>
-          <div class="input-wrapper">
-            <input type="text" class="input-box" id="iflytekAppId" placeholder="APPID">
-            <button class="input-clear" data-for="iflytekAppId"><img src="/cross.svg" width="16" height="16"></button>
-          </div>
-          <div class="input-wrapper">
-            <input type="password" class="input-box" id="iflytekApiSecret" placeholder="API Secret">
-            <button class="input-toggle-vis" data-for="iflytekApiSecret"><img src="/eye-hide.svg" width="16" height="16"></button>
-            <button class="input-clear" data-for="iflytekApiSecret"><img src="/cross.svg" width="16" height="16"></button>
-          </div>
-          <div class="input-wrapper">
-            <input type="password" class="input-box" id="iflytekApiKey" placeholder="API Key">
-            <button class="input-toggle-vis" data-for="iflytekApiKey"><img src="/eye-hide.svg" width="16" height="16"></button>
-            <button class="input-clear" data-for="iflytekApiKey"><img src="/cross.svg" width="16" height="16"></button>
-          </div>
-          <button class="save-credentials-btn" id="saveIflytekBtn" disabled>Save</button>
+        <div class="asr-sub-tabs">
+          <button class="asr-sub-tab active" id="subTabIflytek">iFlytek</button>
+          <button class="asr-sub-tab" id="subTabAliyun">Aliyun</button>
         </div>
-        <div class="steps-hint" id="iflytekStepsHint">
-          <p>1. Go to <a class="link-text" href="https://console.xfyun.cn" target="_blank" rel="noopener">console.xfyun.cn</a> and sign in</p>
-          <p>2. Open Console, create an app, then enable Real-time ASR / Real-time Speech Transcription</p>
-          <p>3. Copy APPID, API Secret, and API Key into Settings above</p>
+        <div id="iflytekPanel">
+          <div class="main-card" id="iflytekCard">
+            <p class="card-label">iFlytek ASR</p>
+            <div class="input-wrapper">
+              <input type="text" class="input-box" id="iflytekAppId" placeholder="APPID">
+              <button class="input-clear" data-for="iflytekAppId"><img src="/cross.svg" width="16" height="16"></button>
+            </div>
+            <div class="input-wrapper">
+              <input type="password" class="input-box" id="iflytekApiSecret" placeholder="API Secret">
+              <button class="input-toggle-vis" data-for="iflytekApiSecret"><img src="/eye-hide.svg" width="16" height="16"></button>
+              <button class="input-clear" data-for="iflytekApiSecret"><img src="/cross.svg" width="16" height="16"></button>
+            </div>
+            <div class="input-wrapper">
+              <input type="password" class="input-box" id="iflytekApiKey" placeholder="API Key">
+              <button class="input-toggle-vis" data-for="iflytekApiKey"><img src="/eye-hide.svg" width="16" height="16"></button>
+              <button class="input-clear" data-for="iflytekApiKey"><img src="/cross.svg" width="16" height="16"></button>
+            </div>
+            <button class="save-credentials-btn" id="saveIflytekBtn" disabled>Save</button>
+            <button class="use-asr-btn" id="useAsrBtn">Use this ASR</button>
+          </div>
+          <div class="steps-hint" id="iflytekStepsHint">
+            <p>1. Go to <a class="link-text" href="https://console.xfyun.cn" target="_blank" rel="noopener">console.xfyun.cn</a> and sign in</p>
+            <p>2. Open Console, create an app, then enable Real-time ASR / Real-time Speech Transcription</p>
+            <p>3. Copy APPID, API Secret, and API Key into Settings above</p>
+          </div>
+        </div>
+        <div id="aliyunPanel" class="hidden">
+          <div class="main-card" id="aliyunCard">
+            <p class="card-label">Aliyun Paraformer</p>
+            <div class="input-wrapper">
+              <input type="password" class="input-box" id="aliyunApiKeyInput" placeholder="API Key">
+              <button class="input-toggle-vis" data-for="aliyunApiKeyInput"><img src="/eye-hide.svg" width="16" height="16"></button>
+              <button class="input-clear" data-for="aliyunApiKeyInput"><img src="/cross.svg" width="16" height="16"></button>
+            </div>
+            <button class="save-credentials-btn" id="saveAliyunBtn" disabled>Save</button>
+            <button class="use-asr-btn" id="useAsrBtnAliyun">Use this ASR</button>
+          </div>
+          <div class="steps-hint" id="aliyunStepsHint">
+            <p>1. Go to <a class="link-text" href="https://bailian.console.aliyun.com" target="_blank" rel="noopener">bailian.console.aliyun.com</a> and sign in</p>
+            <p>2. Click your avatar → API-KEY → Create API Key</p>
+            <p>3. Copy the key and paste it above</p>
+          </div>
         </div>
 
         <h2 class="section-title" style="margin-top: 24px;">English ASR</h2>

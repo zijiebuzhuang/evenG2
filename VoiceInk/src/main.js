@@ -64,8 +64,21 @@ const i18n = {
     connecting: 'Connecting…',
     g2TapToRecord: 'Tap to record',
     g2DoubleTapHint: 'Double-tap to exit / pause / stop',
-    g2StartupHint: 'Preparing display…',
-    g2WaitingForVoice: 'Waiting for voice...',
+    g2StartupHint: '...',
+    g2WaitingForVoice: '...',
+    g2Paused: '...',
+    aliyun: 'Aliyun',
+    aliyunAsr: 'Aliyun ASR',
+    aliyunHint: 'Add your Aliyun API Key in Settings to get started',
+    aliyunSteps: [
+      'Go to <a class="link-text" href="https://bailian.console.aliyun.com" target="_blank" rel="noopener">bailian.console.aliyun.com</a> and sign in',
+      'Click your avatar → API-KEY → Create API Key',
+      'Copy the key and paste it above',
+    ],
+    save: 'Save',
+    saved: 'Saved',
+    useThisAsr: 'Use this ASR',
+    inUse: 'In use',
   },
   zh: {
     settings: '设置',
@@ -126,8 +139,21 @@ const i18n = {
     connecting: '连接中…',
     g2TapToRecord: '单击开始录音',
     g2DoubleTapHint: '双击退出 / 暂停 / 结束',
-    g2StartupHint: '正在准备显示…',
-    g2WaitingForVoice: '等待语音输入…',
+    g2StartupHint: '...',
+    g2WaitingForVoice: '...',
+    g2Paused: '...',
+    aliyun: '阿里云',
+    aliyunAsr: '阿里云语音识别',
+    aliyunHint: '请在设置中添加阿里云 App Key 和 Access Key',
+    aliyunSteps: [
+      '前往 <a class="link-text" href="https://bailian.console.aliyun.com" target="_blank" rel="noopener">bailian.console.aliyun.com</a> 并登录账号',
+      '点击右上角头像 → API-KEY → 创建 API Key',
+      '复制密钥并粘贴到上方即可',
+    ],
+    save: '保存',
+    saved: '已保存',
+    useThisAsr: '使用此识别',
+    inUse: '使用中',
   },
 };
 
@@ -173,10 +199,11 @@ let transcriptIdCounter = 0;
 let recordings = JSON.parse(localStorage.getItem('voiceink_recordings') || '[]');
 let wsUrl = getWebSocketUrl();
 let activeEngine = 'iflytek';
+let activeChineseAsr = 'iflytek'; // tracks which Chinese ASR sub-tab is selected
 let reconnectAttempts = 0;
 let selectedHistoryDateKey = '';
 const MAX_RECONNECT = 10;
-let serverHasCredentials = false; // Will be set by server on connect
+let serverCredentials = { iflytek: false, whisper: false, aliyun: false }; // Will be set by server on connect
 
 // Recording timer state
 let recordingStartTime = null;
@@ -289,49 +316,237 @@ const inputKeyMap = {
   iflytekApiKey: 'voiceink_iflytek_apikey',
   iflytekApiSecret: 'voiceink_iflytek_apisecret',
   whisperKeyInput: 'voiceink_deepgram_key',
+  aliyunApiKeyInput: 'voiceink_aliyun_apikey',
 };
+const credentialStorageKeys = Object.values(inputKeyMap);
+const appStateStorageKeys = [
+  'voiceink_language',
+  'voiceink_glasses_display',
+  'voiceink_glasses_autoclear',
+  'voiceink_glasses_line_count',
+  'voiceink_translation_enabled',
+  'voiceink_native_language',
+  'voiceink_recordings',
+];
+let credentialSyncPromise = null;
+let appStateSyncPromise = null;
+
+function getStoredValue(storageKey) {
+  return localStorage.getItem(storageKey) || '';
+}
+
+function getStoredJsonValue(storageKey, fallback) {
+  const rawValue = getStoredValue(storageKey);
+  if (!rawValue) return fallback;
+
+  try {
+    return JSON.parse(rawValue);
+  } catch (error) {
+    console.warn(`Failed to parse ${storageKey} from storage:`, error);
+    return fallback;
+  }
+}
+
+function loadPersistedAppStateFromStorage() {
+  currentLang = getStoredValue('voiceink_language') || 'en';
+  recordings = getStoredJsonValue('voiceink_recordings', []);
+  glassesDisplayOn = getStoredValue('voiceink_glasses_display') !== 'off';
+  glassesAutoClearMs = getStoredValue('voiceink_glasses_autoclear') || '5000';
+  tempAutoClearMs = glassesAutoClearMs;
+
+  const storedLineCount = parseInt(getStoredValue('voiceink_glasses_line_count') || '4', 10);
+  glassesLineCount = Number.isFinite(storedLineCount) ? storedLineCount : 4;
+  tempLineCount = glassesLineCount;
+
+  translationEnabled = getStoredValue('voiceink_translation_enabled') === 'on';
+  nativeLanguage = getStoredValue('voiceink_native_language') || 'zh';
+  tempNativeLanguage = nativeLanguage;
+  tempLang = currentLang;
+}
+
+function applyPersistedAppState() {
+  loadPersistedAppStateFromStorage();
+  applyLanguage();
+  updateTogglesUI();
+  updateDisplaySettingsUI();
+  updateSections();
+  updateTabs();
+
+  if (recordingState === 'stopped') {
+    updateConnectionStatus();
+    void updateG2Display();
+  }
+}
+
+async function persistStoredValue(storageKey, value) {
+  const trimmedValue = value.trim();
+
+  if (trimmedValue) {
+    localStorage.setItem(storageKey, trimmedValue);
+  } else {
+    localStorage.removeItem(storageKey);
+  }
+
+  if (!bridge?.setLocalStorage) return trimmedValue;
+
+  try {
+    await bridge.setLocalStorage(storageKey, trimmedValue);
+  } catch (error) {
+    console.warn(`Failed to persist ${storageKey} via bridge storage:`, error);
+  }
+
+  return trimmedValue;
+}
+
+async function syncStoredValueFromBridge(storageKey) {
+  const localValue = getStoredValue(storageKey);
+  if (!bridge?.getLocalStorage || !bridge?.setLocalStorage) return localValue;
+
+  try {
+    const bridgeValue = (await bridge.getLocalStorage(storageKey)) || '';
+    if (bridgeValue) {
+      if (bridgeValue !== localValue) {
+        localStorage.setItem(storageKey, bridgeValue);
+      }
+      return bridgeValue;
+    }
+
+    if (localValue) {
+      await bridge.setLocalStorage(storageKey, localValue);
+    }
+  } catch (error) {
+    console.warn(`Failed to sync ${storageKey} with bridge storage:`, error);
+  }
+
+  return localValue;
+}
+
+async function syncCredentialStorageFromBridge() {
+  if (credentialSyncPromise) return credentialSyncPromise;
+
+  credentialSyncPromise = (async () => {
+    for (const storageKey of credentialStorageKeys) {
+      await syncStoredValueFromBridge(storageKey);
+    }
+  })();
+
+  try {
+    await credentialSyncPromise;
+  } finally {
+    credentialSyncPromise = null;
+  }
+}
+
+async function syncAppStateStorageFromBridge() {
+  if (appStateSyncPromise) return appStateSyncPromise;
+
+  appStateSyncPromise = (async () => {
+    for (const storageKey of appStateStorageKeys) {
+      await syncStoredValueFromBridge(storageKey);
+    }
+  })();
+
+  try {
+    await appStateSyncPromise;
+  } finally {
+    appStateSyncPromise = null;
+  }
+}
+
+function applySaveButtonState(btn, currentValue, storedValue) {
+  if (!btn) return;
+  const hasValue = !!currentValue;
+  const isSaved = hasValue && currentValue === storedValue;
+  btn.textContent = isSaved ? t('saved') : t('save');
+  btn.disabled = !hasValue || isSaved;
+  btn.classList.toggle('is-saved', isSaved);
+}
 
 function updateSaveButtons() {
   if (saveIflytekBtn) {
-    const hasIflytek = iflytekAppId.value.trim() && iflytekApiKey.value.trim() && iflytekApiSecret.value.trim();
-    saveIflytekBtn.disabled = !hasIflytek;
+    const appId = iflytekAppId.value.trim();
+    const apiKey = iflytekApiKey.value.trim();
+    const apiSecret = iflytekApiSecret.value.trim();
+    const hasAll = !!(appId && apiKey && apiSecret);
+    const allSaved = hasAll
+      && appId === getStoredValue('voiceink_iflytek_appid')
+      && apiKey === getStoredValue('voiceink_iflytek_apikey')
+      && apiSecret === getStoredValue('voiceink_iflytek_apisecret');
+    saveIflytekBtn.textContent = allSaved ? t('saved') : t('save');
+    saveIflytekBtn.disabled = !hasAll || allSaved;
+    saveIflytekBtn.classList.toggle('is-saved', allSaved);
+  }
+  const saveAliyunBtn = document.getElementById('saveAliyunBtn');
+  if (saveAliyunBtn) {
+    const aliyunApiKeyEl = document.getElementById('aliyunApiKeyInput');
+    applySaveButtonState(saveAliyunBtn, aliyunApiKeyEl?.value.trim() || '', getStoredValue('voiceink_aliyun_apikey'));
   }
   if (saveDeepgramBtn) {
-    const hasDeepgram = whisperKeyInput.value.trim();
-    saveDeepgramBtn.disabled = !hasDeepgram;
+    applySaveButtonState(saveDeepgramBtn, whisperKeyInput.value.trim(), getStoredValue('voiceink_deepgram_key'));
+  }
+  updateUseAsrButtons();
+}
+
+function updateUseAsrButtons() {
+  const hasIflytekCreds = serverCredentials.iflytek || !!(getStoredValue('voiceink_iflytek_appid') && getStoredValue('voiceink_iflytek_apikey') && getStoredValue('voiceink_iflytek_apisecret'));
+  const hasAliyunCreds = serverCredentials.aliyun || !!getStoredValue('voiceink_aliyun_apikey');
+  const btnIflytek = document.getElementById('useAsrBtn');
+  const btnAliyun = document.getElementById('useAsrBtnAliyun');
+  if (btnIflytek) {
+    const active = activeChineseAsr === 'iflytek';
+    btnIflytek.textContent = active ? t('inUse') : t('useThisAsr');
+    btnIflytek.disabled = active || !hasIflytekCreds;
+    btnIflytek.classList.toggle('in-use', active);
+  }
+  if (btnAliyun) {
+    const active = activeChineseAsr === 'aliyun';
+    btnAliyun.textContent = active ? t('inUse') : t('useThisAsr');
+    btnAliyun.disabled = active || !hasAliyunCreds;
+    btnAliyun.classList.toggle('in-use', active);
   }
 }
 
 if (saveIflytekBtn) {
-  saveIflytekBtn.addEventListener('click', () => {
-    localStorage.setItem('voiceink_iflytek_appid', iflytekAppId.value.trim());
-    localStorage.setItem('voiceink_iflytek_apikey', iflytekApiKey.value.trim());
-    localStorage.setItem('voiceink_iflytek_apisecret', iflytekApiSecret.value.trim());
-    saveIflytekBtn.textContent = 'Saved';
-    setTimeout(() => { saveIflytekBtn.textContent = 'Save'; }, 2000);
+  saveIflytekBtn.addEventListener('click', async () => {
+    await Promise.all([
+      persistStoredValue('voiceink_iflytek_appid', iflytekAppId.value),
+      persistStoredValue('voiceink_iflytek_apikey', iflytekApiKey.value),
+      persistStoredValue('voiceink_iflytek_apisecret', iflytekApiSecret.value),
+    ]);
+    updateSaveButtons();
     if (activeEngine === 'iflytek' && recordingState === 'stopped') renderHistory();
     updateButtons();
   });
 }
 
 if (saveDeepgramBtn) {
-  saveDeepgramBtn.addEventListener('click', () => {
-    localStorage.setItem('voiceink_deepgram_key', whisperKeyInput.value.trim());
-    saveDeepgramBtn.textContent = 'Saved';
-    setTimeout(() => { saveDeepgramBtn.textContent = 'Save'; }, 2000);
+  saveDeepgramBtn.addEventListener('click', async () => {
+    await persistStoredValue('voiceink_deepgram_key', whisperKeyInput.value);
+    updateSaveButtons();
     if (activeEngine === 'whisper' && recordingState === 'stopped') renderHistory();
     updateButtons();
   });
 }
 
+const saveAliyunBtn = document.getElementById('saveAliyunBtn');
+if (saveAliyunBtn) {
+  saveAliyunBtn.addEventListener('click', async () => {
+    const aliyunApiKeyEl = document.getElementById('aliyunApiKeyInput');
+    await persistStoredValue('voiceink_aliyun_apikey', aliyunApiKeyEl.value);
+    updateSaveButtons();
+    if (activeEngine === 'aliyun' && recordingState === 'stopped') renderHistory();
+    updateButtons();
+  });
+}
+
 document.querySelectorAll('.input-clear').forEach(btn => {
-  btn.addEventListener('click', () => {
+  btn.addEventListener('click', async () => {
     const inputId = btn.dataset.for;
     const input = document.getElementById(inputId);
     if (input) {
       input.value = '';
       const storageKey = inputKeyMap[inputId];
-      if (storageKey) localStorage.removeItem(storageKey);
+      if (storageKey) await persistStoredValue(storageKey, '');
       updateSaveButtons();
     }
   });
@@ -399,9 +614,9 @@ dialogOverlay.addEventListener('click', (e) => {
   if (e.target === dialogOverlay) dialogOverlay.classList.add('hidden');
 });
 
-dialogConfirm.addEventListener('click', () => {
+dialogConfirm.addEventListener('click', async () => {
   recordings = [];
-  localStorage.setItem('voiceink_recordings', '[]');
+  await persistStoredValue('voiceink_recordings', '[]');
   dialogOverlay.classList.add('hidden');
   renderHistory();
 });
@@ -471,6 +686,7 @@ function applyLanguage() {
     if (el.textContent === 'Translation' || el.textContent === '翻译') el.textContent = t('translation');
     if (el.textContent === 'Chinese ASR' || el.textContent === '中文语音识别') el.textContent = t('chineseAsr');
     if (el.textContent === 'English ASR' || el.textContent === '英文语音识别') el.textContent = t('englishAsr');
+    if (el.textContent === 'Aliyun ASR' || el.textContent === '阿里云语音识别') el.textContent = t('aliyunAsr');
     if (el.textContent === 'General' || el.textContent === '通用') el.textContent = t('general');
     if (el.textContent === 'About' || el.textContent === '关于') el.textContent = t('about');
   });
@@ -494,7 +710,10 @@ function applyLanguage() {
     stepsHints[0].innerHTML = t('iflytekSteps').map((s, i) => `<p>${i + 1}. ${s}</p>`).join('');
   }
   if (stepsHints[1]) {
-    stepsHints[1].innerHTML = t('deepgramSteps').map((s, i) => `<p>${i + 1}. ${s}</p>`).join('');
+    stepsHints[1].innerHTML = t('aliyunSteps').map((s, i) => `<p>${i + 1}. ${s}</p>`).join('');
+  }
+  if (stepsHints[2]) {
+    stepsHints[2].innerHTML = t('deepgramSteps').map((s, i) => `<p>${i + 1}. ${s}</p>`).join('');
   }
 
   // Dialog
@@ -529,6 +748,8 @@ function applyLanguage() {
   updateConnectionStatus();
   // Update buttons text
   updateButtons();
+  // Refresh save / use-asr button labels
+  updateSaveButtons();
   // Update history (for empty state text)
   if (recordingState === 'stopped') renderHistory();
 }
@@ -561,9 +782,9 @@ languageOptions.forEach(opt => {
   });
 });
 
-languageConfirmBtn.addEventListener('click', () => {
+languageConfirmBtn.addEventListener('click', async () => {
   currentLang = tempLang;
-  localStorage.setItem('voiceink_language', currentLang);
+  await persistStoredValue('voiceink_language', currentLang);
   applyLanguage();
   languageModal.classList.add('hidden');
 });
@@ -590,9 +811,9 @@ autoClearOptions.forEach(opt => {
   });
 });
 
-autoClearConfirmBtn.addEventListener('click', () => {
+autoClearConfirmBtn.addEventListener('click', async () => {
   glassesAutoClearMs = tempAutoClearMs;
-  localStorage.setItem('voiceink_glasses_autoclear', glassesAutoClearMs);
+  await persistStoredValue('voiceink_glasses_autoclear', glassesAutoClearMs);
   autoClearValue.textContent = formatAutoClearValue();
   if (recordingState === 'recording') scheduleG2AutoClear();
   autoClearModal.classList.add('hidden');
@@ -627,9 +848,9 @@ lineCountOptions.forEach(opt => {
   });
 });
 
-lineCountConfirmBtn.addEventListener('click', () => {
+lineCountConfirmBtn.addEventListener('click', async () => {
   glassesLineCount = tempLineCount;
-  localStorage.setItem('voiceink_glasses_line_count', String(glassesLineCount));
+  await persistStoredValue('voiceink_glasses_line_count', String(glassesLineCount));
   lineCountValue.textContent = formatLineCountValue();
   lineCountModal.classList.add('hidden');
 });
@@ -670,42 +891,58 @@ nativeLanguageOptions.forEach(opt => {
   });
 });
 
-nativeLanguageConfirmBtn.addEventListener('click', () => {
+nativeLanguageConfirmBtn.addEventListener('click', async () => {
   nativeLanguage = tempNativeLanguage;
-  localStorage.setItem('voiceink_native_language', nativeLanguage);
+  await persistStoredValue('voiceink_native_language', nativeLanguage);
   nativeLanguageValue.textContent = formatNativeLanguageValue();
   nativeLanguageModal.classList.add('hidden');
 });
 
 // --- Page Navigation ---
-function closeSettings() {
+async function closeSettings() {
   settingsPage.classList.add('hidden');
-  localStorage.setItem('voiceink_glasses_display', glassesDisplayOn ? 'on' : 'off');
-  localStorage.setItem('voiceink_glasses_autoclear', glassesAutoClearMs);
-  localStorage.setItem('voiceink_glasses_line_count', String(glassesLineCount));
-  localStorage.setItem('voiceink_translation_enabled', translationEnabled ? 'on' : 'off');
-  localStorage.setItem('voiceink_native_language', nativeLanguage);
+  await Promise.all([
+    persistStoredValue('voiceink_glasses_display', glassesDisplayOn ? 'on' : 'off'),
+    persistStoredValue('voiceink_glasses_autoclear', glassesAutoClearMs),
+    persistStoredValue('voiceink_glasses_line_count', String(glassesLineCount)),
+    persistStoredValue('voiceink_translation_enabled', translationEnabled ? 'on' : 'off'),
+    persistStoredValue('voiceink_native_language', nativeLanguage),
+  ]);
   if (recordingState === 'stopped') renderHistory();
   updateButtons();
 }
 
-function openSettings() {
-  settingsPage.classList.remove('hidden');
-  const deepgramKey = localStorage.getItem('voiceink_deepgram_key') || '';
-  const appId = localStorage.getItem('voiceink_iflytek_appid') || '';
-  const apiKey = localStorage.getItem('voiceink_iflytek_apikey') || '';
-  const apiSecret = localStorage.getItem('voiceink_iflytek_apisecret') || '';
+async function loadCredentialInputs() {
+  if (bridgeReady) {
+    await syncCredentialStorageFromBridge();
+  }
+
+  const deepgramKey = getStoredValue('voiceink_deepgram_key');
+  const appId = getStoredValue('voiceink_iflytek_appid');
+  const apiKey = getStoredValue('voiceink_iflytek_apikey');
+  const apiSecret = getStoredValue('voiceink_iflytek_apisecret');
+  const aliyunApiKeyVal = getStoredValue('voiceink_aliyun_apikey');
+
   console.log('Opening settings, loaded keys:', {
     deepgram: deepgramKey ? '[value]' : '[empty]',
     appId: appId ? '[value]' : '[empty]',
     apiKey: apiKey ? '[value]' : '[empty]',
     apiSecret: apiSecret ? '[value]' : '[empty]',
+    aliyunApiKey: aliyunApiKeyVal ? '[value]' : '[empty]',
   });
+
   whisperKeyInput.value = deepgramKey;
   iflytekAppId.value = appId;
   iflytekApiKey.value = apiKey;
   iflytekApiSecret.value = apiSecret;
+  const aliyunApiKeyEl = document.getElementById('aliyunApiKeyInput');
+  if (aliyunApiKeyEl) aliyunApiKeyEl.value = aliyunApiKeyVal;
   updateSaveButtons();
+}
+
+async function openSettings() {
+  settingsPage.classList.remove('hidden');
+  await loadCredentialInputs();
   updateTogglesUI();
   updateDisplaySettingsUI();
 }
@@ -772,9 +1009,9 @@ function renderHistoryDateTabs(dateKeys) {
   });
 }
 
-function deleteRecording(id) {
+async function deleteRecording(id) {
   recordings = recordings.filter(r => r.id !== id);
-  localStorage.setItem('voiceink_recordings', JSON.stringify(recordings));
+  await persistStoredValue('voiceink_recordings', JSON.stringify(recordings));
   renderHistory();
 }
 
@@ -789,7 +1026,7 @@ function renderHistory() {
     historyDateTabs.style.display = 'none';
     container.classList.add('empty');
     if (activeEngine === 'whisper') {
-      const hasKey = serverHasCredentials || !!localStorage.getItem('voiceink_deepgram_key');
+      const hasKey = serverCredentials.whisper || !!getStoredValue('voiceink_deepgram_key');
       historyList.innerHTML = `
         <div class="empty-state">
           <img src="${BASE}nohistory.svg" width="32" height="32">
@@ -799,8 +1036,19 @@ function renderHistory() {
         </div>`;
       const btn = document.getElementById('emptySettingsBtn');
       if (btn) btn.addEventListener('click', () => openSettings());
+    } else if (activeEngine === 'aliyun') {
+      const hasKey = serverCredentials.aliyun || !!getStoredValue('voiceink_aliyun_apikey');
+      historyList.innerHTML = `
+        <div class="empty-state">
+          <img src="${BASE}nohistory.svg" width="32" height="32">
+          <p>${t('noRecordings')}</p>
+          ${hasKey ? '' : `<p class="empty-hint">${t('aliyunHint')}</p>`}
+          ${hasKey ? '' : `<button class="empty-settings-btn" id="emptySettingsBtn">${t('goToSettings')}</button>`}
+        </div>`;
+      const btn = document.getElementById('emptySettingsBtn');
+      if (btn) btn.addEventListener('click', () => openSettings());
     } else {
-      const hasIflytekKey = serverHasCredentials || !!(localStorage.getItem('voiceink_iflytek_appid') && localStorage.getItem('voiceink_iflytek_apikey'));
+      const hasIflytekKey = serverCredentials.iflytek || !!(getStoredValue('voiceink_iflytek_appid') && getStoredValue('voiceink_iflytek_apikey') && getStoredValue('voiceink_iflytek_apisecret'));
       historyList.innerHTML = `
         <div class="empty-state">
           <img src="${BASE}nohistory.svg" width="32" height="32">
@@ -921,7 +1169,17 @@ function connectWebSocket() {
     const msg = JSON.parse(event.data);
 
     if (msg.type === 'capabilities') {
-      serverHasCredentials = !!msg.serverCredentials;
+      const creds = msg.serverCredentials;
+      if (creds && typeof creds === 'object') {
+        serverCredentials = {
+          iflytek: !!creds.iflytek,
+          whisper: !!(creds.whisper ?? creds.deepgram),
+          aliyun: !!creds.aliyun,
+        };
+      } else {
+        const hasAny = !!creds;
+        serverCredentials = { iflytek: hasAny, whisper: hasAny };
+      }
       updateButtons();
     } else if (msg.type === 'transcription') {
       addTranscript(msg.text);
@@ -1190,6 +1448,11 @@ recordingCard.querySelector('.recording-card-top').addEventListener('click', () 
       bridgeReady = true;
       g2Initialized = false;
       console.log('G2 bridge reconnected');
+      await syncCredentialStorageFromBridge();
+      if (recordingState === 'stopped') {
+        await syncAppStateStorageFromBridge();
+        applyPersistedAppState();
+      }
       updateConnectionStatus();
       bindBridgeEvents();
       showG2StartupHint();
@@ -1229,15 +1492,15 @@ function cleanupBridgeState() {
   }
 }
 
-function hasCredentials() {
-  // Server-managed credentials available — always allow
-  if (serverHasCredentials) return true;
-  // Fallback to client-side localStorage keys (BYO-key / dev mode)
-  if (activeEngine === 'iflytek') {
-    return !!(localStorage.getItem('voiceink_iflytek_appid') && localStorage.getItem('voiceink_iflytek_apikey'));
+function hasCredentials(engine = activeEngine) {
+  if (engine === 'iflytek') {
+    return serverCredentials.iflytek || !!(getStoredValue('voiceink_iflytek_appid') && getStoredValue('voiceink_iflytek_apikey') && getStoredValue('voiceink_iflytek_apisecret'));
   }
-  if (activeEngine === 'whisper') {
-    return !!localStorage.getItem('voiceink_deepgram_key');
+  if (engine === 'whisper') {
+    return serverCredentials.whisper || !!getStoredValue('voiceink_deepgram_key');
+  }
+  if (engine === 'aliyun') {
+    return serverCredentials.aliyun || !!getStoredValue('voiceink_aliyun_apikey');
   }
   return false;
 }
@@ -1248,7 +1511,7 @@ function updateButtons() {
       <img src="${BASE}settings.svg" alt="Settings" width="24" height="24">
     </button>`;
   if (recordingState === 'stopped') {
-    const disabled = !hasCredentials();
+    const disabled = !wsConnected || !hasCredentials();
     buttonContainer.innerHTML = `
       ${settingsBtn}
       <button class="action-button primary" id="recordButton"${disabled ? ' disabled' : ''}>
@@ -1289,7 +1552,7 @@ function updateButtons() {
   if (settingsBtnEl) settingsBtnEl.addEventListener('click', () => openSettings());
 }
 
-function saveRecording() {
+async function saveRecording() {
   const firstText = transcripts[0].text;
   const match = firstText.match(/^[^。，,.\n]+/);
   const title = match ? match[0].slice(0, 20) : firstText.slice(0, 20);
@@ -1305,7 +1568,7 @@ function saveRecording() {
 
   recordings.unshift(record);
   if (recordings.length > 50) recordings = recordings.slice(0, 50);
-  localStorage.setItem('voiceink_recordings', JSON.stringify(recordings));
+  await persistStoredValue('voiceink_recordings', JSON.stringify(recordings));
 }
 
 // --- Audio (three-state) ---
@@ -1330,9 +1593,19 @@ function resetLegacyBrowserMicState() {
 
 async function startRecording() {
   if (recordingState !== 'stopped') return;
+  if (!wsConnected) {
+    console.warn('WebSocket is not connected');
+    updateConnectionStatus();
+    updateButtons();
+    return;
+  }
   if (!isGlassesAudioAvailable()) {
     console.warn('Glasses audio is not available');
     updateConnectionStatus();
+    return;
+  }
+  if (!hasCredentials()) {
+    updateButtons();
     return;
   }
 
@@ -1347,11 +1620,13 @@ async function startRecording() {
   const engine = activeEngine === 'iflytek' ? 'iflytek' : activeEngine;
   const startMsg = { type: 'audio_start', engine };
   if (engine === 'iflytek') {
-    startMsg.iflytekAppId = localStorage.getItem('voiceink_iflytek_appid') || '';
-    startMsg.iflytekApiKey = localStorage.getItem('voiceink_iflytek_apikey') || '';
-    startMsg.iflytekApiSecret = localStorage.getItem('voiceink_iflytek_apisecret') || '';
+    startMsg.iflytekAppId = getStoredValue('voiceink_iflytek_appid');
+    startMsg.iflytekApiKey = getStoredValue('voiceink_iflytek_apikey');
+    startMsg.iflytekApiSecret = getStoredValue('voiceink_iflytek_apisecret');
   } else if (engine === 'whisper') {
-    startMsg.deepgramApiKey = localStorage.getItem('voiceink_deepgram_key') || '';
+    startMsg.deepgramApiKey = getStoredValue('voiceink_deepgram_key');
+  } else if (engine === 'aliyun') {
+    startMsg.aliyunApiKey = getStoredValue('voiceink_aliyun_apikey');
   }
   wsSend(startMsg);
 
@@ -1403,15 +1678,8 @@ async function resumeRecording() {
   if (recordingState !== 'paused') return;
   if (!isGlassesAudioAvailable()) {
     console.warn('Glasses audio is not available');
-    recordingState = 'stopped';
     pauseStartTime = null;
-    updateDurationDot();
-    updateButtons();
-    updateSections();
-    updateRecordingCardUI();
-    updateConnectionStatus();
-    updateTabs();
-    void updateG2Display();
+    stopRecording();
     return;
   }
 
@@ -1426,11 +1694,13 @@ async function resumeRecording() {
   const engine = activeEngine === 'iflytek' ? 'iflytek' : activeEngine;
   const startMsg = { type: 'audio_start', engine };
   if (engine === 'iflytek') {
-    startMsg.iflytekAppId = localStorage.getItem('voiceink_iflytek_appid') || '';
-    startMsg.iflytekApiKey = localStorage.getItem('voiceink_iflytek_apikey') || '';
-    startMsg.iflytekApiSecret = localStorage.getItem('voiceink_iflytek_apisecret') || '';
+    startMsg.iflytekAppId = getStoredValue('voiceink_iflytek_appid');
+    startMsg.iflytekApiKey = getStoredValue('voiceink_iflytek_apikey');
+    startMsg.iflytekApiSecret = getStoredValue('voiceink_iflytek_apisecret');
   } else if (engine === 'whisper') {
-    startMsg.deepgramApiKey = localStorage.getItem('voiceink_deepgram_key') || '';
+    startMsg.deepgramApiKey = getStoredValue('voiceink_deepgram_key');
+  } else if (engine === 'aliyun') {
+    startMsg.aliyunApiKey = getStoredValue('voiceink_aliyun_apikey');
   }
   wsSend(startMsg);
 
@@ -1447,7 +1717,7 @@ async function resumeRecording() {
   void updateG2Display();
 }
 
-function stopRecording() {
+async function stopRecording() {
   if (recordingState === 'stopped') return;
 
   const wasActive = recordingState === 'recording' || recordingState === 'paused';
@@ -1467,7 +1737,7 @@ function stopRecording() {
   }
 
   if (transcripts.length > 0) {
-    saveRecording();
+    await saveRecording();
   }
 
   updateDurationDot();
@@ -1536,9 +1806,10 @@ const SENTENCE_END_RE = /[。！？.!?]$/;
 
 // --- G2 visual line estimation ---
 // G2 container: width=536, padding=12 → usable=512px
-// Firmware fixed font: CJK ~20 chars/line, Latin ~40 chars/line at 512px
-// CJK chars (U+2E80+) occupy roughly 2x width of Latin chars.
-const G2_LINE_WIDTH_UNITS = 60; // 1 Latin char = 1 unit; measured: ~60 English chars/line
+// Firmware fixed font: CJK ~20 chars/line, Latin ~40 chars/line at 512px.
+// We wrap explicitly so multiline text stays stable instead of reflowing the whole paragraph.
+const G2_LINE_WIDTH_UNITS = 40;
+const G2_SAFE_LINE_WIDTH_UNITS = 38;
 
 function charWidth(ch) {
   const code = ch.codePointAt(0);
@@ -1560,30 +1831,75 @@ function charWidth(ch) {
   return 1;
 }
 
-/**
- * Take the tail of `text` that fits approximately `maxVisualLines` lines
- * on the G2 display. We do NOT insert '\n' — let the firmware handle
- * all word-wrapping natively to avoid misaligned line breaks.
- * Uses a conservative width (G2_LINE_WIDTH_UNITS - 4) to avoid overflow.
- */
+function isBreakableWhitespace(ch) {
+  return /\s/.test(ch);
+}
+
+function measureChars(chars) {
+  return chars.reduce((sum, ch) => sum + charWidth(ch), 0);
+}
+
+function findLastBreakIndex(chars) {
+  for (let i = chars.length - 1; i >= 0; i--) {
+    if (isBreakableWhitespace(chars[i])) return i + 1;
+  }
+  return -1;
+}
+
+function wrapParagraphForG2(paragraph, maxUnits = G2_SAFE_LINE_WIDTH_UNITS) {
+  if (!paragraph) return [''];
+
+  const chars = [...paragraph];
+  const lines = [];
+  let lineChars = [];
+  let lineUnits = 0;
+  let lastBreakIdx = -1;
+
+  for (const ch of chars) {
+    const width = charWidth(ch);
+
+    if (lineChars.length > 0 && lineUnits + width > maxUnits) {
+      if (lastBreakIdx > 0) {
+        const head = lineChars.slice(0, lastBreakIdx).join('').trimEnd();
+        const tailChars = lineChars.slice(lastBreakIdx).filter(c => !isBreakableWhitespace(c));
+        if (head) lines.push(head);
+        lineChars = tailChars;
+        lineUnits = measureChars(lineChars);
+      } else {
+        lines.push(lineChars.join('').trimEnd());
+        lineChars = [];
+        lineUnits = 0;
+      }
+      lastBreakIdx = findLastBreakIndex(lineChars);
+    }
+
+    if (lineChars.length === 0 && isBreakableWhitespace(ch)) continue;
+
+    lineChars.push(ch);
+    lineUnits += width;
+    if (isBreakableWhitespace(ch)) lastBreakIdx = lineChars.length;
+  }
+
+  if (lineChars.length > 0) {
+    lines.push(lineChars.join('').trimEnd());
+  }
+
+  return lines.filter(line => line.length > 0);
+}
+
+function wrapTextForG2(text, maxUnits = G2_SAFE_LINE_WIDTH_UNITS) {
+  if (!text) return [];
+
+  return text
+    .split('\n')
+    .flatMap(paragraph => wrapParagraphForG2(paragraph, maxUnits));
+}
+
 function tailTextForG2(text, maxVisualLines) {
   if (!text) return '';
-  const safeWidth = G2_LINE_WIDTH_UNITS - 4; // conservative margin
-  const maxUnits = maxVisualLines * safeWidth;
-
-  // Walk backwards to find where to cut
-  let units = 0;
-  const chars = [...text]; // spread to handle surrogate pairs
-  let cutIdx = chars.length;
-  for (let i = chars.length - 1; i >= 0; i--) {
-    units += charWidth(chars[i]);
-    if (units > maxUnits) {
-      cutIdx = i + 1;
-      break;
-    }
-  }
-  if (units <= maxUnits) cutIdx = 0;
-  return chars.slice(cutIdx).join('');
+  const wrappedLines = wrapTextForG2(text, G2_SAFE_LINE_WIDTH_UNITS);
+  if (wrappedLines.length === 0) return '';
+  return wrappedLines.slice(-maxVisualLines).join('\n');
 }
 
 /**
@@ -1822,13 +2138,15 @@ let g2StartupHintTimer = null;
 let g2ShowingStartupHint = false;
 
 function buildWelcomePage({ showStartupHint = false } = {}) {
-  const hint = showStartupHint ? t('g2StartupHint') : t('g2TapToRecord');
+  const content = showStartupHint
+    ? `VoiceInk\n\n${t('g2StartupHint')}`
+    : `VoiceInk\n\n${t('g2TapToRecord')}\n${t('g2DoubleTapHint')}`;
   return {
     containerTotalNum: 1,
     textObject: [{
       xPosition: 20, yPosition: 20, width: 536, height: 248,
       containerID: 1001, containerName: 'welcome',
-      content: `VoiceInk\n\n${hint}\n${t('g2DoubleTapHint')}`,
+      content,
       isEventCapture: 1,
       borderWidth: 0, borderColor: 0, borderRadius: 0, paddingLength: 12,
     }]
@@ -1866,6 +2184,10 @@ function showG2StartupHint() {
 function buildTranscriptDisplay(isCleared = false) {
   const partialText = document.getElementById('partialTranscript')?.querySelector('.transcript-text')?.textContent?.trim() || '';
 
+  if (recordingState === 'paused') {
+    return buildG2Container(t('g2Paused'));
+  }
+
   if (isCleared) {
     return buildG2Container(t('g2WaitingForVoice'));
   }
@@ -1873,32 +2195,49 @@ function buildTranscriptDisplay(isCleared = false) {
   const maxLines = glassesLineCount;
 
   if (translationEnabled) {
-    // Bilingual mode: foreign on top, native on bottom
-    // The separator '───' takes 1 visual line
-    const foreignMaxLines = Math.ceil(maxLines / 2);
-    const nativeMaxLines = Math.floor(maxLines / 2);
-
-    // Collect foreign text as continuous flow
+    // Bilingual mode: foreign on top, native on bottom.
+    // When both are present, keep the total visual lines within the selected limit.
     const foreignTexts = transcripts.map(item => item.text.trim()).filter(Boolean);
     if (partialText) foreignTexts.push(partialText);
     const foreignFlow = joinTextsForDisplay(foreignTexts);
-    const foreignBody = tailTextForG2(foreignFlow, foreignMaxLines);
 
-    // Collect native text as continuous flow
     const nativeTexts = transcripts
       .map(item => (item.translationText || '').trim())
       .filter(Boolean);
     const nativeFlow = joinTextsForDisplay(nativeTexts);
-    const nativeBody = tailTextForG2(nativeFlow, nativeMaxLines);
 
-    const parts = [];
-    if (foreignBody) parts.push(foreignBody);
-    if (nativeBody) {
-      if (parts.length > 0) parts.push('───');
-      parts.push(nativeBody);
+    const hasForeign = !!foreignFlow;
+    const hasNative = !!nativeFlow;
+
+    if (!hasForeign && !hasNative) {
+      return buildG2Container(t('g2WaitingForVoice'));
     }
-    const body = parts.length > 0 ? parts.join('\n') : t('g2WaitingForVoice');
-    return buildG2Container(body);
+
+    if (hasForeign && hasNative) {
+      if (maxLines === 1) {
+        return buildG2Container(tailTextForG2(nativeFlow, 1));
+      }
+
+      if (maxLines === 2) {
+        const foreignBody = tailTextForG2(foreignFlow, 1);
+        const nativeBody = tailTextForG2(nativeFlow, 1);
+        return buildG2Container([foreignBody, nativeBody].filter(Boolean).join('\n'));
+      }
+
+      const separatorLines = 1;
+      const contentLines = maxLines - separatorLines;
+      const foreignMaxLines = Math.ceil(contentLines / 2);
+      const nativeMaxLines = Math.floor(contentLines / 2);
+      const foreignBody = tailTextForG2(foreignFlow, foreignMaxLines);
+      const nativeBody = tailTextForG2(nativeFlow, nativeMaxLines);
+
+      return buildG2Container([foreignBody, '───', nativeBody].filter(Boolean).join('\n'));
+    }
+
+    const body = hasNative
+      ? tailTextForG2(nativeFlow, maxLines)
+      : tailTextForG2(foreignFlow, maxLines);
+    return buildG2Container(body || t('g2WaitingForVoice'));
   }
 
   // Normal mode: concatenate all text into continuous flow, wrap and take last N lines
@@ -1927,8 +2266,11 @@ async function ensureG2PageInitialized(showStartupHint = false) {
   if (g2Initialized) return true;
 
   const result = await bridge.createStartUpPageContainer(buildWelcomePage({ showStartupHint }));
-  if (result === 0) {
+  if (result === 0 || result === 1) {
     g2Initialized = true;
+    if (result === 1) {
+      console.log('createStartUpPageContainer returned 1 (startup page already exists)');
+    }
     return true;
   }
 
@@ -2050,9 +2392,10 @@ function handleG2Event(event) {
 // --- Tab Switching ---
 function updateTabs() {
   const isActive = recordingState !== 'stopped';
-  const inactiveTab = tabBaidu.classList.contains('active') ? tabWhisper : tabBaidu;
   if (isActive) {
-    inactiveTab.classList.add('disabled');
+    [tabBaidu, tabWhisper].forEach(tab => {
+      if (!tab.classList.contains('active')) tab.classList.add('disabled');
+    });
   } else {
     tabBaidu.classList.remove('disabled');
     tabWhisper.classList.remove('disabled');
@@ -2063,7 +2406,7 @@ tabBaidu.addEventListener('click', () => {
   if (tabBaidu.classList.contains('disabled')) return;
   tabBaidu.classList.add('active');
   tabWhisper.classList.remove('active');
-  activeEngine = 'iflytek';
+  activeEngine = activeChineseAsr;
   if (recordingState === 'stopped') { renderHistory(); updateButtons(); }
 });
 
@@ -2075,8 +2418,57 @@ tabWhisper.addEventListener('click', () => {
   if (recordingState === 'stopped') { renderHistory(); updateButtons(); }
 });
 
+// --- Chinese ASR sub-tabs ---
+const subTabIflytek = document.getElementById('subTabIflytek');
+const subTabAliyun = document.getElementById('subTabAliyun');
+const iflytekPanel = document.getElementById('iflytekPanel');
+const aliyunPanel = document.getElementById('aliyunPanel');
+const useAsrBtn = document.getElementById('useAsrBtn');
+
+if (subTabIflytek) {
+  subTabIflytek.addEventListener('click', () => {
+    activeChineseAsr = 'iflytek';
+    subTabIflytek.classList.add('active');
+    subTabAliyun.classList.remove('active');
+    iflytekPanel.classList.remove('hidden');
+    aliyunPanel.classList.add('hidden');
+    if (tabBaidu.classList.contains('active')) { activeEngine = 'iflytek'; updateButtons(); renderHistory(); }
+    updateUseAsrButtons();
+  });
+}
+
+if (subTabAliyun) {
+  subTabAliyun.addEventListener('click', () => {
+    activeChineseAsr = 'aliyun';
+    subTabAliyun.classList.add('active');
+    subTabIflytek.classList.remove('active');
+    aliyunPanel.classList.remove('hidden');
+    iflytekPanel.classList.add('hidden');
+    if (tabBaidu.classList.contains('active')) { activeEngine = 'aliyun'; updateButtons(); renderHistory(); }
+    updateUseAsrButtons();
+  });
+}
+
+if (useAsrBtn) {
+  useAsrBtn.addEventListener('click', () => {
+    activeChineseAsr = 'iflytek';
+    if (tabBaidu.classList.contains('active')) { activeEngine = 'iflytek'; updateButtons(); renderHistory(); }
+    updateUseAsrButtons();
+  });
+}
+
+const useAsrBtnAliyun = document.getElementById('useAsrBtnAliyun');
+if (useAsrBtnAliyun) {
+  useAsrBtnAliyun.addEventListener('click', () => {
+    activeChineseAsr = 'aliyun';
+    if (tabBaidu.classList.contains('active')) { activeEngine = 'aliyun'; updateButtons(); renderHistory(); }
+    updateUseAsrButtons();
+  });
+}
+
 // --- Init ---
 // WebSocket 和 G2 bridge 并行初始化，互不阻塞
+loadPersistedAppStateFromStorage();
 try {
   applyLanguage();
 } catch (e) {
@@ -2095,6 +2487,11 @@ waitForEvenAppBridge().then(async (b) => {
   bridge = b;
   bridgeReady = true;
   console.log('G2 bridge initialized');
+  await syncCredentialStorageFromBridge();
+  if (recordingState === 'stopped') {
+    await syncAppStateStorageFromBridge();
+    applyPersistedAppState();
+  }
   updateConnectionStatus();
   bindBridgeEvents();
   showG2StartupHint();

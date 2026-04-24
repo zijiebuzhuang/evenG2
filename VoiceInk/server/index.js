@@ -3,14 +3,16 @@ const http = require('http');
 const WebSocket = require('ws');
 const { IflytekRealtimeSTT } = require('./stt-iflytek-realtime');
 const { DeepgramRealtimeSTT } = require('./stt-deepgram-realtime');
+const { AliyunNlsRealtimeSTT } = require('./stt-aliyun-realtime');
 const { translate } = require('./translate');
 
 const PORT = process.env.WS_PORT || 8080;
 const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',') : [];
 
 // Check if server has credentials configured
-const SERVER_HAS_IFLYTEK = !!(process.env.IFLYTEK_APP_ID && process.env.IFLYTEK_API_KEY);
+const SERVER_HAS_IFLYTEK = !!(process.env.IFLYTEK_APP_ID && process.env.IFLYTEK_API_KEY && process.env.IFLYTEK_API_SECRET);
 const SERVER_HAS_DEEPGRAM = !!process.env.DEEPGRAM_API_KEY;
+const SERVER_HAS_ALIYUN = !!process.env.ALIYUN_API_KEY;
 
 const server = http.createServer((req, res) => {
   if (req.url === '/health' && req.method === 'GET') {
@@ -53,7 +55,12 @@ wss.on('connection', (ws) => {
   // Send capabilities on connect
   ws.send(JSON.stringify({
     type: 'capabilities',
-    serverCredentials: SERVER_HAS_IFLYTEK || SERVER_HAS_DEEPGRAM
+    serverCredentials: {
+      iflytek: SERVER_HAS_IFLYTEK,
+      whisper: SERVER_HAS_DEEPGRAM,
+      deepgram: SERVER_HAS_DEEPGRAM,
+      aliyun: SERVER_HAS_ALIYUN,
+    }
   }));
 
   let recording = false;
@@ -88,8 +95,8 @@ wss.on('connection', (ws) => {
           const apiKey = process.env.IFLYTEK_API_KEY || msg.iflytekApiKey;
           const apiSecret = process.env.IFLYTEK_API_SECRET || msg.iflytekApiSecret || '';
           console.log(`iFlytek credentials: appId=${appId ? appId.substring(0, 4) + '...' : 'EMPTY'}, apiKey=${apiKey ? apiKey.substring(0, 4) + '...' : 'EMPTY'}, apiSecret=${apiSecret ? apiSecret.substring(0, 4) + '...' : 'EMPTY'}`);
-          if (!appId || !apiKey) {
-            ws.send(JSON.stringify({ type: 'error', message: 'No iFlytek credentials configured. Add them in Settings.' }));
+          if (!appId || !apiKey || !apiSecret) {
+            ws.send(JSON.stringify({ type: 'error', message: 'No iFlytek credentials configured. Add APPID, API Key, and API Secret in Settings.' }));
             recording = false;
             return;
           }
@@ -128,6 +135,28 @@ wss.on('connection', (ws) => {
           });
           realtimeSession.onError((err) => {
             console.error('Deepgram realtime error:', err.message);
+            ws.send(JSON.stringify({ type: 'error', message: err.message }));
+          });
+        } else if (currentEngine === 'aliyun') {
+          const apiKey = process.env.ALIYUN_API_KEY || msg.aliyunApiKey;
+          if (!apiKey) {
+            ws.send(JSON.stringify({ type: 'error', message: 'No Aliyun API key configured. Add it in Settings.' }));
+            recording = false;
+            return;
+          }
+          const rt = new AliyunNlsRealtimeSTT(apiKey);
+          realtimeSession = rt.startSession();
+          realtimeSession.onResult((result) => {
+            if (result.type === 'partial') {
+              ws.send(JSON.stringify({ type: 'transcription_partial', text: result.text }));
+            } else if (result.type === 'final') {
+              if (result.text && result.text.trim()) {
+                ws.send(JSON.stringify({ type: 'transcription', text: result.text.trim() }));
+              }
+            }
+          });
+          realtimeSession.onError((err) => {
+            console.error('Aliyun NLS realtime error:', err.message);
             ws.send(JSON.stringify({ type: 'error', message: err.message }));
           });
         }

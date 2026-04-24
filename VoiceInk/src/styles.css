@@ -542,6 +542,64 @@ body { -ms-overflow-style: none; scrollbar-width: none; }
 }
 
 .about-card { gap: 4px; }
+
+/* Chinese ASR sub-tabs */
+#aliyunPanel.hidden,
+#iflytekPanel.hidden {
+  display: none;
+}
+
+.asr-sub-tabs {
+  display: flex;
+  gap: 0;
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--divider);
+}
+
+.asr-sub-tab {
+  flex: 1;
+  font-family: var(--font-stack);
+  font-size: 15px;
+  font-weight: 400;
+  color: var(--text-second);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 8px 0;
+  cursor: pointer;
+  text-align: center;
+  margin-bottom: -1px;
+}
+
+.asr-sub-tab.active {
+  color: var(--text-first);
+  border-bottom-color: var(--text-first);
+}
+
+.use-asr-btn {
+  display: block;
+  margin-top: 4px;
+  padding: 0 16px;
+  height: 36px;
+  border: none;
+  border-radius: 6px;
+  background: var(--bg-highlight);
+  color: var(--text-highlight);
+  font-family: var(--font-stack);
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.use-asr-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.use-asr-btn:not(:disabled):active {
+  opacity: 0.7;
+}
 .about-card p { font-size: 15px; line-height: 22px; }
 .about-card .hint { font-size: 13px; color: var(--text-second); }
 
