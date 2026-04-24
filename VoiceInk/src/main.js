@@ -198,8 +198,11 @@ let transcripts = []; // { id, text, offsetMs, translationText, translationStatu
 let transcriptIdCounter = 0;
 let recordings = JSON.parse(localStorage.getItem('voiceink_recordings') || '[]');
 let wsUrl = getWebSocketUrl();
-let activeEngine = 'iflytek';
-let activeChineseAsr = 'iflytek'; // tracks which Chinese ASR sub-tab is selected
+const _persistedChineseAsr = localStorage.getItem('voiceink_active_chinese_asr');
+let activeChineseAsr = (_persistedChineseAsr === 'aliyun' || _persistedChineseAsr === 'iflytek') ? _persistedChineseAsr : 'iflytek';
+let activeEngine = activeChineseAsr; // same default as Chinese sub-engine
+// Sub-tab selection is purely visual; authoritative engine choice comes from Use-ASR button / activeChineseAsr
+let visibleChineseSubTab = activeChineseAsr;
 let reconnectAttempts = 0;
 let selectedHistoryDateKey = '';
 const MAX_RECONNECT = 10;
@@ -2425,50 +2428,50 @@ const iflytekPanel = document.getElementById('iflytekPanel');
 const aliyunPanel = document.getElementById('aliyunPanel');
 const useAsrBtn = document.getElementById('useAsrBtn');
 
+function showChineseSubTab(which) {
+  visibleChineseSubTab = which;
+  const isIf = which === 'iflytek';
+  subTabIflytek?.classList.toggle('active', isIf);
+  subTabAliyun?.classList.toggle('active', !isIf);
+  iflytekPanel?.classList.toggle('hidden', !isIf);
+  aliyunPanel?.classList.toggle('hidden', isIf);
+}
+
+function selectChineseAsr(which) {
+  if (which !== 'iflytek' && which !== 'aliyun') return;
+  if (activeChineseAsr === which) return;
+  activeChineseAsr = which;
+  try { localStorage.setItem('voiceink_active_chinese_asr', which); } catch {}
+  if (tabBaidu.classList.contains('active')) {
+    activeEngine = which;
+    updateButtons();
+    if (recordingState === 'stopped') renderHistory();
+  }
+  updateUseAsrButtons();
+}
+
 if (subTabIflytek) {
-  subTabIflytek.addEventListener('click', () => {
-    activeChineseAsr = 'iflytek';
-    subTabIflytek.classList.add('active');
-    subTabAliyun.classList.remove('active');
-    iflytekPanel.classList.remove('hidden');
-    aliyunPanel.classList.add('hidden');
-    if (tabBaidu.classList.contains('active')) { activeEngine = 'iflytek'; updateButtons(); renderHistory(); }
-    updateUseAsrButtons();
-  });
+  subTabIflytek.addEventListener('click', () => showChineseSubTab('iflytek'));
 }
 
 if (subTabAliyun) {
-  subTabAliyun.addEventListener('click', () => {
-    activeChineseAsr = 'aliyun';
-    subTabAliyun.classList.add('active');
-    subTabIflytek.classList.remove('active');
-    aliyunPanel.classList.remove('hidden');
-    iflytekPanel.classList.add('hidden');
-    if (tabBaidu.classList.contains('active')) { activeEngine = 'aliyun'; updateButtons(); renderHistory(); }
-    updateUseAsrButtons();
-  });
+  subTabAliyun.addEventListener('click', () => showChineseSubTab('aliyun'));
 }
 
 if (useAsrBtn) {
-  useAsrBtn.addEventListener('click', () => {
-    activeChineseAsr = 'iflytek';
-    if (tabBaidu.classList.contains('active')) { activeEngine = 'iflytek'; updateButtons(); renderHistory(); }
-    updateUseAsrButtons();
-  });
+  useAsrBtn.addEventListener('click', () => selectChineseAsr('iflytek'));
 }
 
 const useAsrBtnAliyun = document.getElementById('useAsrBtnAliyun');
 if (useAsrBtnAliyun) {
-  useAsrBtnAliyun.addEventListener('click', () => {
-    activeChineseAsr = 'aliyun';
-    if (tabBaidu.classList.contains('active')) { activeEngine = 'aliyun'; updateButtons(); renderHistory(); }
-    updateUseAsrButtons();
-  });
+  useAsrBtnAliyun.addEventListener('click', () => selectChineseAsr('aliyun'));
 }
 
 // --- Init ---
 // WebSocket 和 G2 bridge 并行初始化，互不阻塞
 loadPersistedAppStateFromStorage();
+// Sync Chinese ASR sub-tab visibility to persisted engine choice
+showChineseSubTab(activeChineseAsr);
 try {
   applyLanguage();
 } catch (e) {
